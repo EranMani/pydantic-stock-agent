@@ -41,6 +41,7 @@ docker-compose up --build                                                # app +
 - `NEVER write JavaScript, CSS, or HTML files` — ALL frontend code must be implemented using NiceGUI's Python API exclusively
 - `NEVER store secrets in the Dockerfile or docker-compose.yml` — ALL sensitive values must be injected via environment variables at runtime
 - `NEVER merge Phase N+1 work into a Phase N commit` — one logical unit per commit, exactly as defined in the protocol
+- `ALWAYS add a module-level docstring to every .py file` and a one-line docstring to every public function and `async def`; add inline comments on non-obvious logic (asyncio bridges, financial conditions, dynamic routing, Celery/async boundaries)
 
 ---
 
