@@ -143,7 +143,7 @@ pydantic-stock-agent/
 ## Section 6 — Protocol Reference
 
 ```
-@.claude/rules/commit-protocol.md
+@.claude/commit-protocol.md
 ```
 
 This single line causes Claude Code to lazy-load the full 62-step roadmap when needed.
