@@ -387,6 +387,30 @@ The weight being `1.0` means this metric alone determines the entire score — b
 
 **Key rule:** sub-score and weight are always independent. Sub-score answers *"how good is this value?"*, weight answers *"how much do we care?"*
 
+**Normalisation ranges used in Step 12:**
+| Metric | Range | Logic |
+|---|---|---|
+| `pe_ratio` | `[0, 50]` — lower is better | P/E of 0–15 = cheap, 30 = fair, 50+ = expensive |
+| `revenue_growth` | `[0, 1.5]` — higher is better | Capped at 150% to accommodate high-growth small caps (e.g. early NVDA, TSLA) |
+| `market_cap` | `[0, 1T]` — higher is better | $1T+ = full score; smaller caps score proportionally lower |
+| `beta` | sweet spot `~1.0` — penalise extremes | beta > 2.0 penalised as excess risk; beta < 0 also penalised |
+
+---
+
+### Future enhancement: add `scoring_profile` to `ScoringStrategy`
+The normalisation ranges above are a compromise — they work for balanced/growth strategies but are not ideal for pure value investors. A future `scoring_profile` field should be added to `ScoringStrategy` to dynamically select ranges from a lookup table in `config.py`:
+
+```python
+# Future design
+class ScoringStrategy(BaseModel):
+    scoring_profile: Literal["value", "balanced", "growth"] = "balanced"
+    # "value"   → pe_ratio max=20, revenue_growth max=0.15
+    # "balanced"→ pe_ratio max=35, revenue_growth max=0.50
+    # "growth"  → pe_ratio max=60, revenue_growth max=1.50
+```
+
+This allows the scorer to dynamically select normalisation ranges based on the investor's strategy type without changing the scorer interface. **Not implemented yet — implement when ScoringStrategy is extended in a future phase.**
+
 Every deterministic filter applied before the LLM means:
 1. **Fewer tokens** → lower cost per analysis
 2. **Higher signal density** → better reasoning quality
