@@ -68,7 +68,7 @@ pydantic-stock-agent/
 │   │   │   ├── yf_client.py           # yfinance: market cap, P/E, earnings, revenue, peers
 │   │   │   └── web_search.py          # DuckDuckGo: news search, risk/lawsuit flag parsing
 │   │   └── technical/
-│   │       ├── core_data.py           # tvDatafeed OHLCV extraction + NaN validation
+│   │       ├── core_data.py           # yfinance OHLCV extraction + NaN validation (tvdatafeed dropped — unmaintained)
 │   │       └── indicators/
 │   │           ├── moving_averages.py # SMA 50/150/200, 52-week high/low
 │   │           ├── macd.py            # MACD line, signal, histogram
@@ -132,7 +132,7 @@ pydantic-stock-agent/
 
 - **Agent core:** `pydantic-ai>=0.0.14`, `pydantic>=2.7`, `fastapi`, `httpx`, `logfire`
 - **Models:** Cloud — OpenAI / Gemini (final reasoning) | Local — `ollama` running `llama3.2` (NLP via PydanticAI `OllamaModel`)
-- **Data:** `yfinance>=0.2`, `tvdatafeed`, `pandas-ta`, `python-dotenv`
+- **Data:** `yfinance>=0.2` (fundamental + OHLCV technical data), `pandas-ta`, `python-dotenv`
 - **Search:** `duckduckgo-search`
 - **Frontend:** `nicegui` (Python-only, mounts on FastAPI)
 - **Workers:** `celery>=5`, `redis` (Celery broker + real-time state whiteboard)

@@ -120,11 +120,12 @@ Each commit message is exact — copy it verbatim.
 
 ## Phase 3: Technical Data Ingestion (Steps 13–17)
 
-### Step 13 — `chore: install tvdatafeed and pandas-ta`
+### Step 13 — `chore: install pandas-ta and switch to yfinance for OHLCV data`
 **Target files:** `pyproject.toml`
 **Key signatures:**
-- `uv add tvdatafeed "pandas-ta>=0.3"`
-**Acceptance criteria:** `uv run python -c "from tvDatafeed import TvDatafeed, Interval; import pandas_ta"` exits with code 0.
+- `uv add "pandas-ta>=0.3"` — tvdatafeed dropped (unmaintained, not on PyPI, unofficial TradingView scraper)
+- yfinance used for both fundamental AND technical OHLCV data (`yf.Ticker(ticker).history()`)
+**Acceptance criteria:** `uv run python -c "import pandas_ta; import yfinance"` exits with code 0; yfinance returns a DataFrame with OHLCV columns and 200+ rows.
 
 ---
 

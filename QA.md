@@ -203,6 +203,37 @@ This pattern appears throughout the project:
 
 ---
 
+## Phase 3 — Technical Data Ingestion
+
+### Q: Why did we drop tvdatafeed and use yfinance for OHLCV instead?
+`tvdatafeed` was the original plan for fetching OHLCV technical data from TradingView, but was dropped for production due to:
+
+1. **Not on PyPI** — only installable from GitHub (`pip install git+https://...`), meaning no versioned releases, no stability guarantees
+2. **Unmaintained** — syntax warnings in its own source code, no active development
+3. **Unofficial scraper** — connects to TradingView's websocket without official API support; TradingView can break or block it at any time without notice
+
+`yfinance` covers both fundamental AND technical data:
+- Fundamental: `yf.Ticker(ticker).info` — P/E, revenue growth, market cap, peers
+- Technical OHLCV: `yf.Ticker(ticker).history(period="2y")` — returns a clean DataFrame with `Open`, `High`, `Low`, `Close`, `Volume` columns that `pandas-ta` works with directly
+
+**Rule of thumb for production dependencies:** if a library is not on PyPI, has no versioned releases, or relies on an unofficial/scraped API — find an alternative.
+
+---
+
+### Q: What about scraping TradingView charts with a vision model to read indicator values?
+Evaluated and rejected. The approach would be: log in with a generic TradingView account → screenshot the chart with indicators → feed to a vision model to extract values.
+
+Problems:
+1. **Fragile** — TradingView can change their UI at any time, breaking the scraper silently
+2. **Inaccurate** — vision models are terrible at extracting precise float values from chart pixels (e.g. `SMA_200 = 187.43`)
+3. **Violates CLAUDE.md rule** — "NEVER allow the AI agent to compute or estimate any numerical indicator" — vision model reading chart values is exactly this
+4. **Slow and costly** — screenshot + vision API call adds 3-5 seconds and token cost per analysis
+5. **ToS violation** — scraping TradingView likely violates their terms of service
+
+Vision models are useful for qualitative chart pattern recognition ("does this look like a cup and handle?") — never for extracting precise numerical values. `yfinance` + `pandas-ta` computes the same values deterministically in milliseconds for free.
+
+---
+
 ## Phase 2 — Fundamental Pipeline
 
 ### Q: The user only provides a ticker symbol — how do we get the full company name for news searches?
