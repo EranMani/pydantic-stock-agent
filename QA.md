@@ -149,6 +149,60 @@ In this project we use `.env` config now. The secrets directory pattern becomes 
 
 ---
 
+## Async & Threading Concepts
+
+### Q: What is the risk of making blocking calls inside an async function, and how does `asyncio.to_thread()` solve it?
+
+**The core problem — blocking the event loop:**
+
+The event loop is **single-threaded**. When you write `async def`, you're telling Python this function runs on the event loop. The event loop can juggle many coroutines concurrently, but only by switching between them at `await` points. A blocking call inside `async def` has no `await` — it freezes the entire thread:
+
+```python
+# ❌ WRONG — looks async but secretly blocks everything
+async def fetch_valuation_metrics(ticker: str):
+    info = yf.Ticker(ticker).info  # blocking HTTP call, no await
+    # During this 1-3 second call: no other coroutines run,
+    # no UI updates, no other requests — the whole app stalls
+```
+
+**The fix — `asyncio.to_thread()`:**
+
+`asyncio.to_thread()` offloads the blocking function to a **thread pool worker**, freeing the event loop to continue handling other work. When the thread finishes, the result is handed back to the event loop:
+
+```python
+# ✅ CORRECT — blocking work runs in a thread, event loop stays free
+async def fetch_valuation_metrics(ticker: str):
+    info = await asyncio.to_thread(_get_ticker_info, ticker)
+    # Event loop is free during the network call
+    # Other coroutines run normally while we wait
+```
+
+**Why this matters especially in this project:**
+
+In Phase 9, Celery workers run `asyncio.run(_async_run_fundamental())` which fetches data for multiple tickers concurrently via `asyncio.gather()`. Without `asyncio.to_thread()`, the gather is fake — it runs sequentially. With it, all fetches run truly in parallel:
+
+```python
+# With asyncio.to_thread — truly concurrent, ~3 seconds total
+await asyncio.gather(
+    fetch_valuation_metrics("AAPL"),   # thread 1
+    fetch_valuation_metrics("MSFT"),   # thread 2
+    fetch_valuation_metrics("NVDA"),   # thread 3
+)
+
+# Without asyncio.to_thread — sequential, ~9 seconds total
+# The gather still awaits each one, but each one blocks while running
+```
+
+**Rule of thumb for the async/sync boundary:**
+> Any library that makes network I/O or disk I/O synchronously (yfinance, tvDatafeed, DuckDuckGo) must be wrapped with `asyncio.to_thread()` when called from inside an `async def`. Otherwise you have a fake async function that silently destroys concurrency.
+
+This pattern appears throughout the project:
+- `yf_client.py` — yfinance `.info` calls
+- `core_data.py` (Step 14) — tvDatafeed `get_hist()` calls
+- `web_search.py` (Step 9) — DuckDuckGo `DDGS().text()` calls
+
+---
+
 ## Phase 2 — Fundamental Pipeline
 
 ### Q: What happens when yfinance returns an empty industry peers list?
