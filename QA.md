@@ -146,3 +146,18 @@ SettingsConfigDict(extra="ignore")  # silently ignore unknown vars (default)
 ```
 
 In this project we use `.env` config now. The secrets directory pattern becomes relevant in Phase 10 when Docker is introduced.
+
+---
+
+## Phase 2 — Fundamental Pipeline
+
+### Q: What should the frontend display when `pe_ratio` is None?
+`pe_ratio` returns `None` from yfinance when the company has no earnings (i.e. not yet profitable — e.g. early-stage biotech, high-growth pre-profit tech). This has a specific financial meaning and must be communicated clearly to the user.
+
+Display rules for `report_card.py` (Step 34):
+- `pe_ratio = None` → `"N/A — company not yet profitable"`
+- `revenue_growth = None` → `"N/A — data unavailable"`
+- `beta = None` → `"N/A — data unavailable"`
+- `market_cap = None` → `"N/A — data unavailable"`
+
+`pe_ratio` gets a specific explanation because `None` has a clear financial meaning. The others are more likely just missing data from yfinance and should show a generic unavailable message.
