@@ -37,3 +37,22 @@ class Settings(BaseSettings):
 
 # Module-level singleton — import this throughout the codebase
 settings = Settings()
+
+# Base weights for each fundamental metric — re-normalised dynamically by the
+# scorer based on which metrics are active in the ScoringStrategy
+METRIC_WEIGHTS: dict[str, float] = {
+    "pe_ratio": 0.4,
+    "revenue_growth": 0.4,
+    "market_cap": 0.1,
+    "beta": 0.1,
+}
+
+# Normalisation ranges for fundamental metric sub-scoring.
+# Each entry is (max_value, higher_is_better).
+# Calibrated for balanced/growth strategies — see QA.md for future scoring_profile enhancement.
+METRIC_NORMALISATION: dict[str, tuple[float, bool]] = {
+    "pe_ratio":       (50.0,  False),  # lower P/E is better; capped at 50
+    "revenue_growth": (1.5,   True),   # higher growth is better; 150% ceiling for growth stocks
+    "market_cap":     (1e12,  True),   # higher market cap = more stability; $1T ceiling
+    "beta":           (2.0,   False),  # closer to 0 penalises inverse; >2 penalises excess risk
+}
