@@ -151,6 +151,21 @@ In this project we use `.env` config now. The secrets directory pattern becomes 
 
 ## Phase 2 — Fundamental Pipeline
 
+### Q: What happens when yfinance returns an empty industry peers list?
+yfinance's `industryPeers` field is unreliable — it returns `[]` for many tickers (confirmed with IREN and TSM). This breaks the peer comparison feature entirely if left unhandled.
+
+**Proposed countermeasure for Step 30 (`get_peer_reports`):**
+Implement a fallback chain when `fetch_industry_peers()` returns `[]`:
+
+1. **DuckDuckGo search fallback** — query `"{ticker} industry peers competitors similar stocks"` and parse ticker symbols from the results
+2. **Screener fallback** — query a financial screener (e.g. Finviz, Macrotrends) via DuckDuckGo and extract peer tickers from the page
+
+The fallback should be transparent — the agent tool always returns a peers list, the caller never needs to know which source was used. Cap the result at 10 tickers regardless of source.
+
+This should be implemented in `fetch_industry_peers()` in `yf_client.py` as a layered fallback, keeping the screener/web logic in `web_search.py`.
+
+---
+
 ### Q: What should the frontend display when `pe_ratio` is None?
 `pe_ratio` returns `None` from yfinance when the company has no earnings (i.e. not yet profitable — e.g. early-stage biotech, high-growth pre-profit tech). This has a specific financial meaning and must be communicated clearly to the user.
 
