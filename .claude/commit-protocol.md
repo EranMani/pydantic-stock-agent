@@ -56,7 +56,7 @@ Each commit message is exact — copy it verbatim.
 
 ## Phase 2: Fundamental Data Pipeline (Steps 6–12)
 
-### Step 6 — `chore: install and configure yfinance and duckduckgo-search`
+### Step 6 — `chore: install and configure yfinance and duckduckgo-search, establish Settings class with base app config`
 **Target files:** `pyproject.toml`, `src/stock_agent/config.py`
 **Key signatures:**
 - `uv add "yfinance>=0.2" duckduckgo-search`
