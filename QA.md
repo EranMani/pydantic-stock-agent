@@ -287,6 +287,29 @@ The goal is to pass the **maximum number of unique, high-signal snippets** into 
 
 ---
 
+### Q: Is `extract_risk_flags()` a guardrails system? And since it's sync, does Celery call it directly?
+
+**On risk flags as guardrails:**
+`extract_risk_flags()` is a **signal filter**, not an AI safety guardrail. The distinction:
+- `search_risk_news()` casts a wide net — returns anything DuckDuckGo finds for risk queries. Some snippets will be genuine red flags, others noise ("company has no known investigations")
+- `extract_risk_flags()` narrows that down deterministically to only snippets containing concrete risk keywords
+
+The LLM then reasons over pre-filtered, high-signal risk snippets rather than classifying noise itself. This is context engineering — deterministic filtering so the LLM focuses on reasoning, not classification.
+
+**On sync functions and Celery:**
+`extract_risk_flags()` is sync because it's pure computation — no I/O, just string matching. Calling a sync function inside an async context is always safe. The full call chain in Phase 9:
+
+```
+@celery.task def run_fundamental_task()        ← sync Celery task, no await
+    → asyncio.run(_async_run_fundamental())    ← bridges sync → async
+        → await search_risk_news()             ← async I/O (DuckDuckGo)
+        → extract_risk_flags(snippets)         ← sync computation inside async — perfectly fine
+```
+
+It's only the reverse that causes problems: calling async from sync without a bridge (`asyncio.run()`).
+
+---
+
 ### Q: What happens when yfinance returns an empty industry peers list?
 yfinance's `industryPeers` field is unreliable — it returns `[]` for many tickers (confirmed with IREN and TSM). This breaks the peer comparison feature entirely if left unhandled.
 

@@ -17,6 +17,19 @@ from ddgs import DDGS
 # query contributes focused signal rather than diluting with generic coverage
 _RESULTS_PER_QUERY = 5
 
+# Keywords that indicate a concrete risk event — used by extract_risk_flags()
+# to filter raw search snippets down to genuine red flags before LLM reasoning
+RISK_KEYWORDS: list[str] = [
+    "lawsuit",
+    "SEC",
+    "investigation",
+    "fraud",
+    "recall",
+    "fine",
+    "penalty",
+    "bankruptcy",
+]
+
 
 async def search_company_news(
     ticker: str, company_name: str, max_results: int = 10
@@ -109,6 +122,21 @@ async def _search_snippets(query: str) -> list[str]:
         return [r["body"] for r in results if r.get("body")]
     except Exception:
         return []
+
+
+def extract_risk_flags(articles: list[str]) -> list[str]:
+    """Filter snippets to only those containing a concrete risk keyword.
+
+    Acts as a deterministic signal filter — removes noise snippets that mention
+    the company without flagging a real risk event, so the LLM context window
+    only receives confirmed risk signals. Matching is case-insensitive.
+    Pure computation — no I/O, safe to call from both sync and async contexts.
+    """
+    # Lower-case once for efficiency rather than per-keyword per-article
+    return [
+        article for article in articles
+        if any(kw.lower() in article.lower() for kw in RISK_KEYWORDS)
+    ]
 
 
 def _deduplicate(snippets: list[str]) -> list[str]:
