@@ -46,4 +46,49 @@ flowchart TD
 
 ---
 
+---
+
+## Phase 2 — Fundamental Scoring Pipeline
+
+### Scoring Algorithm Flow (`fundamental_scorer.py`)
+
+How a `FundamentalData` object and `ScoringStrategy` become a single score in `[1.0, 10.0]`.
+
+```mermaid
+flowchart TD
+    A([FundamentalData + ScoringStrategy]) --> B
+
+    subgraph Step1 ["Step 1 — Sub-score per active metric (0.0 → 1.0)"]
+        B[For each metric in strategy.fundamental_metrics]
+        B --> C1["pe_ratio → lower is better\nP/E 15 ≈ 0.80 | P/E 50 ≈ 0.30 | None = 0.0"]
+        B --> C2["revenue_growth → higher is better\n+50% ≈ 0.90 | negative ≈ 0.10"]
+        B --> C3["market_cap → higher is better\nlarge cap = stability signal"]
+        B --> C4["beta → closer to 1.0 is neutral\nbeta > 2 penalised as excess risk"]
+    end
+
+    subgraph Step2 ["Step 2 — Re-normalise weights of active metrics"]
+        C1 & C2 & C3 & C4 --> D["Fetch base weights from METRIC_WEIGHTS in config.py"]
+        D --> E["Re-normalise: weight / sum of active weights\n→ active weights always sum to 1.0"]
+    end
+
+    subgraph Step3 ["Step 3 — Weighted sum → scale → clamp"]
+        E --> F["weighted_sum = Σ sub_score × normalised_weight\n→ float in 0.0 to 1.0"]
+        F --> G["Scale: final = 1.0 + weighted_sum × 9.0\n→ float in 1.0 to 10.0"]
+        G --> H["Clamp to 1.0–10.0\n← safety net"]
+    end
+
+    H --> I([fundamental_score: float])
+```
+
+**Why re-normalise weights?**
+If a strategy only activates `pe_ratio` (base weight 0.4), re-normalising it to `1.0` ensures the score still spans the full `[1.0, 10.0]` range. Without re-normalisation, the maximum possible score would be artificially capped at `1.0 + 0.4 × 9.0 = 4.6` — penalising focused strategies unfairly.
+
+**Sub-score vs weight — two independent concerns:**
+- **Sub-score** answers: *"how good is this metric's value?"* → always `0.0` to `1.0`
+- **Weight** answers: *"how much do we care about this metric?"* → re-normalised to sum to `1.0`
+
+The raw value (e.g. P/E = 15) never flows through to the final score directly — it is always converted to a sub-score first.
+
+---
+
 *More diagrams will be added as phases are built.*

@@ -335,6 +335,59 @@ This is why `CLAUDE.md` enforces: *"ALL numerical calculations MUST be completed
 - If it requires synthesising multiple signals, understanding context, or producing language → that's what the LLM is for
 
 Every deterministic filter applied before the LLM means:
+
+---
+
+### Q: How does the fundamental scoring algorithm work? What is the calculation formula?
+
+The scorer receives a `FundamentalData` object and a `ScoringStrategy` and returns a single float in `[1.0, 10.0]`. Three concerns are computed in strict order:
+
+**Step 1 — Sub-score per metric (0.0 → 1.0)**
+Each active metric's raw value is normalised independently into a 0.0–1.0 sub-score based on financial logic:
+- `pe_ratio`: lower is better — P/E of 15 scores ~0.80, P/E of 50 scores ~0.30, `None` scores 0.0
+- `revenue_growth`: higher is better — 50% growth scores ~0.90, negative growth scores ~0.10
+- `market_cap`: higher is better — larger cap = more stability
+- `beta`: closer to 1.0 is neutral — very high beta (>2) penalised as excess risk
+
+**Step 2 — Re-normalise weights of active metrics**
+Only the metrics listed in `strategy.fundamental_metrics` are included. Their weights are fetched from `METRIC_WEIGHTS` in `config.py`, then re-normalised so they sum to 1.0:
+```
+active_weights = {m: METRIC_WEIGHTS[m] for m in strategy.fundamental_metrics}
+total = sum(active_weights.values())
+normalised = {m: w / total for m, w in active_weights.items()}
+```
+This ensures excluding a metric never artificially shrinks the score range.
+
+**Step 3 — Weighted sum → scale → clamp**
+```
+weighted_sum = Σ (sub_score[m] × normalised_weight[m])   # 0.0 → 1.0
+final_score  = 1.0 + weighted_sum × 9.0                  # scale to 1.0 → 10.0
+final_score  = clamp(final_score, 1.0, 10.0)              # safety net
+```
+
+**Concrete example — strategy: `["pe_ratio", "revenue_growth"]`**
+
+| Metric | Raw value | Sub-score | Base weight | Re-normalised weight | Contribution |
+|---|---|---|---|---|---|
+| `pe_ratio` | 15.0 | 0.80 | 0.4 | 0.5 | 0.40 |
+| `revenue_growth` | 0.25 | 0.70 | 0.4 | 0.5 | 0.35 |
+| **Total** | | | | | **0.75** |
+
+`final_score = 1.0 + 0.75 × 9.0 = 7.75`
+
+**Single metric example — strategy: `["pe_ratio"]` only**
+
+| Metric | Raw value | Sub-score | Re-normalised weight | Contribution |
+|---|---|---|---|---|
+| `pe_ratio` | 15.0 | 0.80 | 1.0 | 0.80 |
+
+`final_score = 1.0 + 0.80 × 9.0 = 8.2`
+
+The weight being `1.0` means this metric alone determines the entire score — but the raw value `15` never flows through directly. It was already converted to sub-score `0.80` before weighting.
+
+**Key rule:** sub-score and weight are always independent. Sub-score answers *"how good is this value?"*, weight answers *"how much do we care?"*
+
+Every deterministic filter applied before the LLM means:
 1. **Fewer tokens** → lower cost per analysis
 2. **Higher signal density** → better reasoning quality
 3. **Consistent behaviour** → same input always produces same filtered output, regardless of model temperature
