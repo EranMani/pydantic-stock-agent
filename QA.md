@@ -72,3 +72,20 @@ Reasons:
 5. **Swappability** — scoring algorithm or data source can be swapped without touching the tool interface
 
 The LLM only ever sees **clean, typed, pre-computed results**.
+
+---
+
+### Q: Why should we add `Field(description=...)` to every Pydantic model field? Is it necessary?
+Yes — descriptions serve double duty:
+
+1. **For the LLM** — PydanticAI serializes the full model schema (including field descriptions) into the agent's context. Without descriptions the agent just sees raw numbers; with them it understands *what* each value represents and reasons over it more accurately.
+2. **For OpenAPI docs** — descriptions appear automatically in `/docs`, making the API self-documenting at zero extra cost.
+
+Without descriptions:
+```json
+{"pe_ratio": 15.2, "score": 7.5}
+```
+With descriptions, the agent's schema context includes:
+> `pe_ratio` — "Price-to-earnings ratio. Lower values may indicate undervaluation. Can be negative for loss-making companies."
+
+This is a non-negotiable rule added to `CLAUDE.md`: **always add `Field(description=...)` to every field in every Pydantic model.**

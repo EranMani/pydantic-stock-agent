@@ -7,7 +7,7 @@ dependency injection system (ctx.deps).
 
 from dataclasses import dataclass
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 
 class ScoringStrategy(BaseModel):
@@ -17,10 +17,22 @@ class ScoringStrategy(BaseModel):
     relative weight of each pipeline in the final weighted score.
     """
 
-    fundamental_metrics: list[str] = ["pe_ratio", "revenue_growth"]
-    technical_indicators: list[str] = ["trend_template", "vcp"]
-    fundamental_weight: float = 0.50
-    technical_weight: float = 0.50
+    fundamental_metrics: list[str] = Field(
+        default=["pe_ratio", "revenue_growth"],
+        description="List of fundamental metric names to include in scoring. Must match keys in METRIC_WEIGHTS in config.py.",
+    )
+    technical_indicators: list[str] = Field(
+        default=["trend_template", "vcp"],
+        description="List of technical indicator names to include in scoring. Must match keys in INDICATOR_MODULES in technical_scorer.py.",
+    )
+    fundamental_weight: float = Field(
+        default=0.50,
+        description="Proportion of the final score attributed to fundamental analysis. Must sum to 1.0 with technical_weight.",
+    )
+    technical_weight: float = Field(
+        default=0.50,
+        description="Proportion of the final score attributed to technical analysis. Must sum to 1.0 with fundamental_weight.",
+    )
 
     @model_validator(mode="after")
     def weights_sum_to_one(self) -> "ScoringStrategy":
