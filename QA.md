@@ -205,6 +205,68 @@ This pattern appears throughout the project:
 
 ## Phase 2 — Fundamental Pipeline
 
+### Q: The user only provides a ticker symbol — how do we get the full company name for news searches?
+yfinance provides the full company name via `info.get("longName")` (e.g. `"AAPL"` → `"Apple Inc."`). The solution is a small util function in `yf_client.py`:
+
+```python
+async def fetch_company_name(ticker: str) -> str:
+    info = await asyncio.to_thread(_get_ticker_info, ticker)
+    return info.get("longName") or ticker  # fallback to ticker symbol if not found
+```
+
+This will be added to `yf_client.py` before Step 26 (agent tool registration), where the tool flow will be:
+```
+user inputs "AAPL"
+    → fetch_company_name("AAPL")             → "Apple Inc."
+    → search_company_news("AAPL", "Apple Inc.")
+    → search_recent_catalysts("AAPL", "Apple Inc.")
+    → search_risk_news("AAPL", "Apple Inc.")
+```
+
+**Not implemented yet** — strictly out of scope until needed in Step 26. Follow the protocol, tell the story of progress in order.
+
+---
+
+### Q: How do we ensure the news search returns the most relevant and recent catalysts, not just generic price movement coverage?
+This is critical to the application's value — returning generic "stock is up today" headlines is useless. The user needs to understand **why** the stock is moving and what recent events (earnings, dilution, lawsuits, product launches, macro events) are driving it.
+
+**The problem with a generic query:**
+```python
+query = f"{ticker} {company_name} news"  # ❌ returns latest price movement articles, buries catalysts
+```
+
+**The solution — targeted multi-query strategy in Steps 10 & 11:**
+
+Instead of one generic search, fire **multiple focused queries** and merge results:
+
+1. **Earnings & revenue catalysts:**
+   `"RKLB Rocket Lab earnings revenue guidance {current_year}"`
+
+2. **Dilution / capital raises:**
+   `"RKLB Rocket Lab shares offering dilution {current_year}"`
+
+3. **Risk events:**
+   `"RKLB Rocket Lab lawsuit SEC investigation fraud recall {current_year}"`
+
+4. **General recent catalysts:**
+   `"RKLB Rocket Lab catalyst news {current_year}"`
+
+Each query targets a specific category of event. Results are merged, deduplicated, and passed to the Ollama NLP sub-agent (Step 26) which extracts the most relevant snippets before the main agent reasons over them.
+
+5. **Investor Relations (IR) website:**
+   `"RKLB Rocket Lab investor relations press release {current_year} site:ir.rocketlabusa.com OR site:investors.rocketlabusa.com"`
+   IR pages are the most authoritative source — they contain official press releases, earnings transcripts, capital raise announcements, forward guidance, and management commentary that may not yet be covered by financial media. This gives the agent direct access to what the company itself is saying about its future plans.
+
+**Key design decisions for Steps 10 & 11:**
+- Always include `{current_year}` in queries — never hardcoded — to avoid stale results
+- Use `max_results=5` per query rather than `max_results=10` on one query — better signal-to-noise ratio
+- The `search_recent_catalysts` and `search_risk_news` functions (Step 10) must use specific query templates, not generic ones
+- The `extract_risk_flags` function (Step 11) keyword-matches against the merged results to surface specific risk signals
+
+**Bottom line:** the quality of the agent's final `StockReport` summary depends entirely on the quality of the news snippets fed into it. Targeted queries = better context = more valuable output for the user.
+
+---
+
 ### Q: What happens when yfinance returns an empty industry peers list?
 yfinance's `industryPeers` field is unreliable — it returns `[]` for many tickers (confirmed with IREN and TSM). This breaks the peer comparison feature entirely if left unhandled.
 
