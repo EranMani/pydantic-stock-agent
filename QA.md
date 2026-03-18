@@ -89,3 +89,60 @@ With descriptions, the agent's schema context includes:
 > `pe_ratio` — "Price-to-earnings ratio. Lower values may indicate undervaluation. Can be negative for loss-making companies."
 
 This is a non-negotiable rule added to `CLAUDE.md`: **always add `Field(description=...)` to every field in every Pydantic model.**
+
+---
+
+## Phase 2 — Configuration
+
+### Q: Why use `BaseSettings` over a plain settings class?
+Three concrete advantages over a plain `class Settings`:
+
+1. **Automatic env var reading** — no manual `os.getenv()` calls. If `APP_ENV` is set in the shell or `.env`, Pydantic maps it to the right field automatically, including type coercion (`PORT=8080` as a string becomes `int`).
+2. **Type validation at startup** — if someone sets `PORT=abc`, the app crashes immediately at import time with a clear `ValidationError`, not silently at runtime. Same Pydantic guarantees used everywhere else, applied to config.
+3. **Layered config priority** — `SettingsConfigDict` enforces: `shell env vars > .env file > field defaults`. In production you inject secrets via Docker/shell env vars and they automatically override `.env` — no code changes between environments.
+
+Plain class comparison:
+```python
+# Plain — manual casting, ungraceful errors
+class Settings:
+    PORT = int(os.getenv("PORT", 8080))  # must cast manually
+
+# BaseSettings — automatic, validated, environment-aware
+class Settings(BaseSettings):
+    PORT: int = 8080  # cast + validated automatically
+```
+
+---
+
+### Q: What can `SettingsConfigDict` be used for beyond `.env` configuration?
+It has several practical uses:
+
+1. **`.env` file** (what we use now):
+```python
+SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+```
+
+2. **Environment variable prefix** — avoids name collisions when multiple services share the same environment:
+```python
+SettingsConfigDict(env_prefix="STOCK_AGENT_")
+# PORT in code maps to STOCK_AGENT_PORT in the environment
+```
+
+3. **Case sensitivity control** — by default env vars are case-insensitive; enforce strict casing if needed:
+```python
+SettingsConfigDict(case_sensitive=True)
+```
+
+4. **Secrets directory** (Docker/Kubernetes) — reads secrets from mounted files instead of env vars:
+```python
+SettingsConfigDict(secrets_dir="/run/secrets")
+# Reads /run/secrets/DATABASE_URL as the DATABASE_URL value
+```
+
+5. **Extra fields behaviour**:
+```python
+SettingsConfigDict(extra="forbid")  # crash if unknown env vars are passed
+SettingsConfigDict(extra="ignore")  # silently ignore unknown vars (default)
+```
+
+In this project we use `.env` config now. The secrets directory pattern becomes relevant in Phase 10 when Docker is introduced.
