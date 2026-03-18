@@ -205,6 +205,53 @@ This pattern appears throughout the project:
 
 ## Phase 3 — Technical Data Ingestion
 
+### Q: How does OHLCV data cleaning work, and why is it critical before passing to indicator modules?
+
+**The cleaning pipeline in `validate_ohlcv()`:**
+
+**Step 1 — Column check:**
+Verify all 5 required columns exist (`Open`, `High`, `Low`, `Close`, `Volume`). If any are missing the function raises `ValueError` immediately — there is no point continuing with incomplete data.
+
+**Step 2 — `ffill().bfill()` — fill NaN values:**
+
+Real market data has gaps. Exchanges are closed on weekends and holidays, data vendors occasionally miss sessions, and some tickers have thin trading history. These gaps show up as NaN in the DataFrame.
+
+`ffill()` (forward fill) — carries the last known value forward:
+```
+Date        Close
+Monday      100.0
+Tuesday     NaN    → filled with 100.0  (Monday carried forward)
+Wednesday   NaN    → filled with 100.0  (still carrying forward)
+Thursday    102.0
+```
+
+`.bfill()` (backward fill, chained after ffill) — fills the next known value backward. Handles NaN at the very start of the DataFrame where ffill has nothing to carry forward:
+```
+Date        Close
+Row 1       NaN    → ffill fails (no prior value), bfill fills with Row 2's value
+Row 2       100.0
+```
+
+Together they guarantee **zero NaN values anywhere in the DataFrame** — ffill handles middle/end gaps, bfill handles start gaps.
+
+**Step 3 — Minimum row count (200):**
+Reject DataFrames with fewer than 200 rows. SMA_200 requires exactly 200 bars of history to produce a meaningful value — feeding it less would silently produce NaN or wrong results in downstream indicator modules.
+
+**Why this matters — the chain of responsibility:**
+The cleaned DataFrame returned by `fetch_ohlcv()` is the **single source of truth** for all technical work. Every indicator module (SMA, MACD, VCP, Trend Template) receives this same DataFrame and appends its computed columns to it, passing it forward like a chain:
+
+```
+fetch_ohlcv()
+    → validate_ohlcv()       ← quality gate — clean or reject
+        → add_moving_averages()   ← appends SMA_50, SMA_150, SMA_200
+            → add_macd()          ← appends MACD columns
+                → check_trend_template()  ← reads all appended columns
+```
+
+If NaN values were allowed through, they would silently corrupt every indicator computed downstream — wrong scores, wrong recommendations, wrong output to the user. The cleaning step is a non-negotiable contract: **every module in the chain can trust the DataFrame it receives is complete and well-formed.**
+
+---
+
 ### Q: Why did we drop tvdatafeed and use yfinance for OHLCV instead?
 `tvdatafeed` was the original plan for fetching OHLCV technical data from TradingView, but was dropped for production due to:
 
