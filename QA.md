@@ -239,23 +239,43 @@ query = f"{ticker} {company_name} news"  # ❌ returns latest price movement art
 
 Instead of one generic search, fire **multiple focused queries** and merge results:
 
-1. **Earnings & revenue catalysts:**
-   `"RKLB Rocket Lab earnings revenue guidance {current_year}"`
+**Catalyst queries (`search_recent_catalysts`):**
+1. `"{ticker} {company_name} catalyst earnings revenue guidance {current_year}"`
+2. `"{ticker} {company_name} shares offering dilution capital raise {current_year}"`
+3. `"{ticker} {company_name} acquisition merger deal {current_year}"`
+4. `"{ticker} {company_name} government contract partnership deal {current_year}"`
+5. `"{ticker} {company_name} investor relations press release {current_year}"`
 
-2. **Dilution / capital raises:**
-   `"RKLB Rocket Lab shares offering dilution {current_year}"`
-
-3. **Risk events:**
-   `"RKLB Rocket Lab lawsuit SEC investigation fraud recall {current_year}"`
-
-4. **General recent catalysts:**
-   `"RKLB Rocket Lab catalyst news {current_year}"`
+**Risk queries (`search_risk_news`):**
+1. `"{ticker} {company_name} lawsuit SEC investigation {current_year}"`
+2. `"{ticker} {company_name} fraud recall fine penalty {current_year}"`
+3. `"{ticker} {company_name} bankruptcy debt risk warning {current_year}"`
 
 Each query targets a specific category of event. Results are merged, deduplicated, and passed to the Ollama NLP sub-agent (Step 26) which extracts the most relevant snippets before the main agent reasons over them.
 
 5. **Investor Relations (IR) website:**
    `"RKLB Rocket Lab investor relations press release {current_year} site:ir.rocketlabusa.com OR site:investors.rocketlabusa.com"`
    IR pages are the most authoritative source — they contain official press releases, earnings transcripts, capital raise announcements, forward guidance, and management commentary that may not yet be covered by financial media. This gives the agent direct access to what the company itself is saying about its future plans.
+
+**Why deduplication matters — context engineering:**
+
+When firing multiple overlapping queries, the same high-signal event (e.g. an earnings beat) will appear in several query results simultaneously because DuckDuckGo doesn't know our queries are related. Without deduplication:
+
+```
+["Q4 earnings beat...", "Q4 earnings beat...", "Q4 earnings beat...", "NASA contract signed..."]
+```
+
+With deduplication:
+```
+["Q4 earnings beat...", "NASA contract signed..."]
+```
+
+This is a **context engineering** concern — the LLM has a finite context window, and every token counts. Feeding duplicate snippets to the Ollama NLP sub-agent (Step 26) wastes context window tokens on redundant information, which:
+1. Reduces the number of *unique* signals the agent can reason over
+2. Artificially inflates the weight of repeated events in the agent's reasoning
+3. Increases token cost with cloud models (OpenAI/Gemini) for no informational gain
+
+The goal is to pass the **maximum number of unique, high-signal snippets** into the context window — not the maximum number of snippets. Quality over quantity is the core principle of context engineering.
 
 **Key design decisions for Steps 10 & 11:**
 - Always include `{current_year}` in queries — never hardcoded — to avoid stale results
