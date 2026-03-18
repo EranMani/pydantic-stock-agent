@@ -157,7 +157,6 @@ This single line causes Claude Code to lazy-load the full 62-step roadmap when n
 `.env` keys required:
 
 - `LOGFIRE_TOKEN` — optional, for observability
-- `TV_USERNAME`, `TV_PASSWORD` — optional TradingView credentials for tvDatafeed
 - `APP_ENV` — `development` | `production`
 - `PORT` — web server port (default `8080`)
 - `DATABASE_URL` — `postgresql+asyncpg://user:pass@postgres:5432/stockagent`

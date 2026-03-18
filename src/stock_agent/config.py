@@ -13,14 +13,6 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
-    TV_USERNAME: str = Field(
-        default="",
-        description="TradingView username for tvDatafeed authenticated session. Leave empty for anonymous access.",
-    )
-    TV_PASSWORD: str = Field(
-        default="",
-        description="TradingView password for tvDatafeed authenticated session. Leave empty for anonymous access.",
-    )
     LOGFIRE_TOKEN: str = Field(
         default="",
         description="Logfire API token for structured observability. Optional — logging is skipped if empty.",

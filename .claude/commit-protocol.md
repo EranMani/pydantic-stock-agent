@@ -60,7 +60,8 @@ Each commit message is exact — copy it verbatim.
 **Target files:** `pyproject.toml`, `src/stock_agent/config.py`
 **Key signatures:**
 - `uv add "yfinance>=0.2" duckduckgo-search`
-- `class Settings(BaseSettings)` — fields: `TV_USERNAME: str = ""`, `TV_PASSWORD: str = ""`, `LOGFIRE_TOKEN: str = ""`, `APP_ENV: str = "development"`, `PORT: int = 8080`; reads from `.env` via `model_config = SettingsConfigDict(env_file=".env")`
+- `class Settings(BaseSettings)` — fields: `LOGFIRE_TOKEN: str = ""`, `APP_ENV: str = "development"`, `PORT: int = 8080`; reads from `.env` via `model_config = SettingsConfigDict(env_file=".env")`
+- Note: `TV_USERNAME` and `TV_PASSWORD` removed — tvdatafeed dropped in Step 13
 - `settings = Settings()` — module-level singleton
 **Acceptance criteria:** `from stock_agent.config import settings` imports cleanly; `settings.APP_ENV` defaults to `"development"`.
 
@@ -132,20 +133,21 @@ Each commit message is exact — copy it verbatim.
 ### Step 14 — `feat: implement OHLCV daily data extraction for the requested ticker`
 **Target files:** `src/stock_agent/pipelines/technical/core_data.py`
 **Key signatures:**
-- `def get_tv_client() -> TvDatafeed` — returns a `TvDatafeed(settings.TV_USERNAME, settings.TV_PASSWORD)` instance (anonymous if credentials empty)
-- `async def fetch_ohlcv(ticker: str, exchange: str = "NASDAQ", n_bars: int = 300) -> pd.DataFrame`
+- `async def fetch_ohlcv(ticker: str, n_bars: int = 300) -> pd.DataFrame` — uses `yf.Ticker(ticker).history(period="2y")` wrapped in `asyncio.to_thread()`
 - `def validate_ohlcv(df: pd.DataFrame) -> pd.DataFrame` — fills NaN, raises `ValueError` if fewer than 200 rows remain after cleaning
+- `def _fetch_history(ticker: str) -> pd.DataFrame` — synchronous yfinance helper, used via `asyncio.to_thread()` only
 
-**Critical implementation note:** `tvDatafeed.get_hist()` is a **synchronous, blocking** call. It MUST be wrapped with `asyncio.to_thread()` to avoid blocking the event loop inside the Celery `_async_*` coroutine:
+**Note:** tvdatafeed was dropped — unmaintained, not on PyPI, unofficial TradingView scraper. yfinance used for both fundamental and technical OHLCV data.
+
+**Critical implementation note:** `yf.Ticker().history()` is a **synchronous, blocking** call. It MUST be wrapped with `asyncio.to_thread()` to avoid blocking the event loop:
 
 ```python
-async def fetch_ohlcv(ticker: str, exchange: str = "NASDAQ", n_bars: int = 300) -> pd.DataFrame:
-    tv = get_tv_client()
-    df = await asyncio.to_thread(tv.get_hist, ticker, exchange, interval=Interval.in_daily, n_bars=n_bars)
+async def fetch_ohlcv(ticker: str, n_bars: int = 300) -> pd.DataFrame:
+    df = await asyncio.to_thread(_fetch_history, ticker)
     return validate_ohlcv(df)
 ```
 
-**Acceptance criteria:** `fetch_ohlcv` is an `async def` containing no direct `tv.get_hist()` call outside of `asyncio.to_thread()`; confirmed via code review in the acceptance test.
+**Acceptance criteria:** `fetch_ohlcv` is an `async def` using `asyncio.to_thread()`; returns DataFrame with `Open`, `High`, `Low`, `Close`, `Volume` columns and 200+ rows.
 
 ---
 
@@ -157,12 +159,11 @@ async def fetch_ohlcv(ticker: str, exchange: str = "NASDAQ", n_bars: int = 300) 
 
 ---
 
-### Step 16 — `feat: authenticate and establish tvDatafeed connection with credential fallback`
+### Step 16 — `feat: add lru_cache to yfinance client for connection reuse`
 **Target files:** `src/stock_agent/pipelines/technical/core_data.py`
 **Key signatures:**
-- `get_tv_client()` returns `TvDatafeed(username, password)` when both `TV_USERNAME` and `TV_PASSWORD` are set; falls back to `TvDatafeed()` (anonymous) when either is empty
-- Client creation is wrapped in `@lru_cache(maxsize=1)` to avoid redundant connections
-**Acceptance criteria:** `get_tv_client()` called twice returns the same cached object; no credentials in `.env` still returns a valid client without raising.
+- `_fetch_history()` wrapped with `@lru_cache(maxsize=128)` to cache yfinance results per ticker — avoids redundant HTTP calls when the same ticker is requested multiple times in one analysis run
+**Acceptance criteria:** `_fetch_history("AAPL")` called twice returns the same cached result without making a second HTTP request; confirmed via mock in unit test.
 
 ---
 
@@ -610,7 +611,7 @@ async def _async_merge_and_score(
 **Target files:** `src/stock_agent/agent.py` (or `src/stock_agent/api.py`)
 **Key signatures:**
 - `GET /health` → `{"status": "ok", "version": settings.APP_VERSION}`
-- `GET /ready` → checks tvDatafeed connectivity, yfinance reachability, and Ollama connectivity via `GET http://ollama:11434/api/tags`; returns `{"status": "ready"}` (200) or `{"status": "unavailable", "reason": str}` (503)
+- `GET /ready` → checks yfinance reachability and Ollama connectivity via `GET http://ollama:11434/api/tags`; returns `{"status": "ready"}` (200) or `{"status": "unavailable", "reason": str}` (503)
 **Acceptance criteria:** Both endpoints return correct status codes in unit tests with mocked dependencies; `/ready` correctly returns 503 when Ollama mock raises a connection error.
 
 ---
