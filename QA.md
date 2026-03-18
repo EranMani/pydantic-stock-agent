@@ -387,6 +387,88 @@ The weight being `1.0` means this metric alone determines the entire score — b
 
 **Key rule:** sub-score and weight are always independent. Sub-score answers *"how good is this value?"*, weight answers *"how much do we care?"*
 
+---
+
+### Q: Where does the 50% weight come from? What do the `1` and `9` mean in the scaling formula?
+
+**Where the 50% comes from — re-normalisation visualised:**
+
+Each metric has a base weight in `METRIC_WEIGHTS`. When only a subset is active, their weights are re-scaled so they always sum to 1.0 (100%):
+
+```
+Strategy: ["pe_ratio", "revenue_growth"]
+
+Base weights:
+┌─────────────────┬──────────┐
+│ pe_ratio        │  0.4     │
+│ revenue_growth  │  0.4     │
+│ market_cap      │  0.1     │  ← excluded, ignored
+│ beta            │  0.1     │  ← excluded, ignored
+└─────────────────┴──────────┘
+
+Active total = 0.4 + 0.4 = 0.8
+
+Re-normalised:
+┌─────────────────┬──────────────────────────┐
+│ pe_ratio        │  0.4 / 0.8 = 0.50 (50%)  │
+│ revenue_growth  │  0.4 / 0.8 = 0.50 (50%)  │
+└─────────────────┴──────────────────────────┘
+                            total = 1.00 ✓
+```
+
+If the strategy were `["pe_ratio", "market_cap"]` instead:
+```
+Active total = 0.4 + 0.1 = 0.5
+
+┌─────────────────┬──────────────────────────┐
+│ pe_ratio        │  0.4 / 0.5 = 0.80 (80%)  │
+│ market_cap      │  0.1 / 0.5 = 0.20 (20%)  │
+└─────────────────┴──────────────────────────┘
+                            total = 1.00 ✓
+```
+
+The weights always re-normalise to 1.0 regardless of which metrics are active.
+
+---
+
+**What do the `1` and `9` mean — range scaling visualised:**
+
+Our weighted sum is always between `0.0` and `1.0`. We want the final score between `1.0` and `10.0`. The formula maps one range onto the other:
+
+```
+scaled = min_target + (value × (max_target - min_target))
+       = 1.0        + (value × (10.0       - 1.0))
+       = 1.0        + (value × 9.0)
+
+  1.0  = the FLOOR  of our target range
+  9.0  = the WIDTH  of our target range (10 - 1)
+```
+
+Visualised as a number line:
+
+```
+Weighted sum:   0.0 ──────────────── 0.5 ──────────────── 1.0
+                 │                    │                     │
+                 ▼                    ▼                     ▼
+Final score:   1.0 ──────────────── 5.5 ──────────────── 10.0
+
+Formula check:
+  worst:   1.0 + (0.0 × 9.0) =  1.0  ✓
+  average: 1.0 + (0.5 × 9.0) =  5.5  ✓
+  best:    1.0 + (1.0 × 9.0) = 10.0  ✓
+```
+
+This formula works for any target range. Examples:
+```
+0–100:   0   + value × 100
+1–5:     1.0 + value × 4.0
+0–10:    0   + value × 10.0
+```
+
+The `1` ensures the **worst possible stock never scores zero** — a score of 1.0 means "very poor" not "no data". The `9` stretches the full width of the remaining range.
+
+---
+
 **Normalisation ranges used in Step 12:**
 | Metric | Range | Logic |
 |---|---|---|
