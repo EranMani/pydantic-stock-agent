@@ -310,6 +310,37 @@ It's only the reverse that causes problems: calling async from sync without a br
 
 ---
 
+### Q: When should we enforce Python rules vs. rely on LLM reasoning? How does this affect token cost and context quality?
+
+**The core principle:** everything that can be decided deterministically should **never** reach the LLM. Only information that genuinely requires reasoning should consume context window tokens.
+
+This is why `CLAUDE.md` enforces: *"ALL numerical calculations MUST be completed by the deterministic pipeline BEFORE any LLM is invoked."* It's not just about correctness — it's about cost efficiency and context quality too.
+
+| Concern | Handle with Python (deterministic) | Pass to LLM (reasoning) |
+|---|---|---|
+| **News relevance** | `extract_risk_flags()` keyword-filters non-risk snippets | Only confirmed risk signal snippets |
+| **Duplicate content** | `_deduplicate()` removes repeated snippets | Only unique news events |
+| **Technical indicators** | pandas-ta computes SMA, MACD, VCP mathematically | Only the pre-computed values |
+| **Scoring math** | `calculate_fundamental_score()` applies weights and clamps | Only the final score floats |
+| **Peer list size** | `fetch_industry_peers()` caps at 10 tickers | Only the relevant peer subset |
+| **Data validation** | `validate_ohlcv()` checks NaN, row count, required columns | Only a clean, validated DataFrame |
+| **Weight validation** | `ScoringStrategy` validator ensures weights sum to 1.0 | Never — pure constraint enforcement |
+| **Risk keyword matching** | `extract_risk_flags()` string-matches against `RISK_KEYWORDS` | Never — deterministic classification |
+| **Final recommendation** | N/A — too nuanced for rules | LLM synthesises all signals into BUY/WATCH/AVOID |
+| **Analyst narrative** | N/A — requires language and context | LLM writes the `summary` field |
+| **Cross-signal reasoning** | N/A — requires holistic judgement | LLM connects fundamental + technical + news signals |
+
+**The mental model:**
+- If a 5-line Python function can do it reliably → do it in Python, never in the LLM
+- If it requires synthesising multiple signals, understanding context, or producing language → that's what the LLM is for
+
+Every deterministic filter applied before the LLM means:
+1. **Fewer tokens** → lower cost per analysis
+2. **Higher signal density** → better reasoning quality
+3. **Consistent behaviour** → same input always produces same filtered output, regardless of model temperature
+
+---
+
 ### Q: What happens when yfinance returns an empty industry peers list?
 yfinance's `industryPeers` field is unreliable — it returns `[]` for many tickers (confirmed with IREN and TSM). This breaks the peer comparison feature entirely if left unhandled.
 
