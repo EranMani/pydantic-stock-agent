@@ -31,6 +31,17 @@ def ma200_trending_up(df: pd.DataFrame, lookback_days: int = 20) -> bool:
     return bool(df["SMA_200"].iloc[-1] > df["SMA_200"].iloc[-lookback_days])
 
 
+def detect_volume_dryup(df: pd.DataFrame, lookback: int = 50, threshold: float = 0.7) -> bool:
+    """Return True if the latest volume is below threshold × mean volume over the lookback window.
+
+    A volume dry-up signals that sellers have backed off — the stock is consolidating
+    quietly, which is a prerequisite for a healthy VCP base before a breakout.
+    """
+    avg_volume = df["Volume"].iloc[-lookback:].mean()
+    # Latest volume below threshold × average → dry-up confirmed
+    return bool(df["Volume"].iloc[-1] < threshold * avg_volume)
+
+
 def price_above_mas(df: pd.DataFrame) -> bool:
     """Return True if the latest close is strictly above both SMA_150 and SMA_200.
 
