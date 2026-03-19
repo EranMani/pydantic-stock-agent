@@ -116,6 +116,36 @@ EOSE     1.00   FAIL            False    $5.28
 
 ## Changelog
 
+### v0.1.3 — 2026-03-19
+
+**Bug fix — all 4 tools hanging indefinitely on Windows (two root causes)**
+
+#### Root cause 1 — subprocess stdin inheritance (affects `get_current_step`, `run_tests`)
+`subprocess.run()` without `stdin=subprocess.DEVNULL` inherits the MCP server's
+Windows IOCP (overlapped) stdin pipe. While `git` or `pytest` hold an open handle
+to that pipe, `anyio`'s async stdin reader is permanently blocked — the tool call
+never returns a response.
+
+**Fix:** Added `stdin=subprocess.DEVNULL` to both `subprocess.run()` calls and
+converted both tools to `async def` with `asyncio.to_thread()` so subprocess
+execution never blocks the event loop.
+
+#### Root cause 2 — heavy deferred imports blocking the event loop (affects `analyze_ticker`, `compare_tickers`)
+Importing `pandas` / `yfinance` / `pandas_ta` inside an `async def` tool function
+blocks the asyncio event loop for ~2 seconds while the imports execute. On Windows,
+this 2-second block prevents `anyio`'s zero-capacity memory stream rendezvous from
+completing, so the tool response is queued but never flushed to stdout.
+
+**Fix:** Moved all pipeline imports (`ScoringStrategy`, `fetch_ohlcv`,
+`calculate_technical_score`) to module level. They now execute before `mcp.run()`
+calls `anyio.run()`, so the event loop is never blocked during tool execution.
+Server startup is ~2s longer, but all tool calls are now fast and reliable.
+
+**Additional:** Removed the now-redundant `_async_analyze_ticker` and
+`_async_compare_tickers` helper functions — the tool functions are now self-contained.
+
+---
+
 ### v0.1.2 — 2026-03-19
 
 **Bug fix — heavy imports at module level caused 5+ minute MCP server startup**
