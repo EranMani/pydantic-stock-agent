@@ -116,6 +116,18 @@ EOSE     1.00   FAIL            False    $5.28
 
 ## Changelog
 
+### v0.1.1 — 2026-03-19
+
+**Bug fix — async tools crash under FastMCP's running event loop**
+
+#### Fixed
+- `analyze_ticker` — converted from `def` to `async def`; replaced `asyncio.run(_async_analyze_ticker(...))` with a direct `await` call. `asyncio.run()` raises `RuntimeError` when called from within an already-running event loop (FastMCP's own loop), which caused every ticker analysis call to fail.
+- `compare_tickers` — same fix: converted to `async def` and replaced `asyncio.run(_async_compare_tickers(...))` with `await`. FastMCP natively supports async tool functions, so no bridge is needed.
+
+**Tools unaffected:** `get_current_step` and `run_tests` are synchronous (git/subprocess I/O only) and required no changes.
+
+---
+
 ### v0.1.0 — 2026-03-19
 
 **First release — 4 tools focused on development workflow acceleration**

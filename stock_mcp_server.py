@@ -8,7 +8,7 @@ Run via: uv run python stock_mcp_server.py
 Configured in ~/.claude/claude.json under mcpServers.
 """
 
-import asyncio
+import asyncio  # still used by asyncio.gather inside _async_compare_tickers
 import subprocess
 from pathlib import Path
 
@@ -95,16 +95,14 @@ def get_current_step() -> str:
 # ---------------------------------------------------------------------------
 
 @mcp.tool()
-def analyze_ticker(ticker: str) -> str:
+async def analyze_ticker(ticker: str) -> str:
     """Run the full technical pipeline on a ticker and return a scored summary.
 
     Fetches OHLCV data via yfinance, computes all moving averages, runs the
     Minervini Trend Template and VCP checks, and returns a formatted TechnicalData
     summary. Replaces the manual test scripts written after each build step.
     """
-    # Bridge async pipeline into sync MCP tool via asyncio.run()
-    result = asyncio.run(_async_analyze_ticker(ticker))
-    return result
+    return await _async_analyze_ticker(ticker)
 
 
 async def _async_analyze_ticker(ticker: str) -> str:
@@ -136,13 +134,13 @@ async def _async_analyze_ticker(ticker: str) -> str:
 # ---------------------------------------------------------------------------
 
 @mcp.tool()
-def compare_tickers(tickers: list[str]) -> str:
+async def compare_tickers(tickers: list[str]) -> str:
     """Run analyze_ticker concurrently on a list of tickers and return a ranked comparison table.
 
     Fetches and scores all tickers in parallel via asyncio.gather, then sorts
     results by technical score descending. Replaces multi-ticker test loops.
     """
-    return asyncio.run(_async_compare_tickers(tickers))
+    return await _async_compare_tickers(tickers)
 
 
 async def _async_compare_tickers(tickers: list[str]) -> str:
