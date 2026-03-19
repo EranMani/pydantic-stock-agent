@@ -25,6 +25,14 @@ class Settings(BaseSettings):
         default=8080,
         description="Port the NiceGUI/FastAPI web server listens on.",
     )
+    OPENAI_API_KEY: str = Field(
+        default="",
+        description="OpenAI API key for cloud model inference. Takes precedence over GEMINI_API_KEY if both are set.",
+    )
+    GEMINI_API_KEY: str = Field(
+        default="",
+        description="Google Gemini API key for cloud model inference. Used when OPENAI_API_KEY is not set.",
+    )
 
 
 # Module-level singleton — import this throughout the codebase
