@@ -114,6 +114,70 @@ EOSE     1.00   FAIL            False    $5.28
 
 ---
 
+## Windows Compatibility Notes
+
+FastMCP uses `anyio` under the hood to run its event loop and flush tool responses to stdout via a **zero-capacity memory stream rendezvous** — both sides (writer and reader) must be ready at the same moment for the flush to complete. On Linux/macOS this is forgiving; on Windows it is not, because Windows uses **IOCP (I/O Completion Ports)** for async I/O, which is less tolerant of event-loop stalls. Two categories of mistakes will silently hang every tool call on Windows:
+
+---
+
+### Rule 1 — Never block the event loop inside a tool function
+
+**What goes wrong:** Importing heavy modules (`pandas`, `yfinance`, `pandas_ta`) inside an `async def` tool function blocks the asyncio event loop for ~2 seconds while the C-extensions load. During that 2-second block, `anyio`'s stdout rendezvous cannot complete, so the tool response is queued but **never flushed** — the call hangs indefinitely.
+
+**The rule:** All imports used by tool functions must live at **module level**, executed once before `mcp.run()` starts the event loop. Accepting a slightly longer server startup (~2s) is the correct trade-off.
+
+```python
+# WRONG — blocks the event loop on first call
+@mcp.tool()
+async def analyze_ticker(ticker: str) -> str:
+    from stock_agent.pipelines.technical.core_data import fetch_ohlcv  # 2s block
+    ...
+
+# CORRECT — import at module level, event loop never stalls
+from stock_agent.pipelines.technical.core_data import fetch_ohlcv
+
+@mcp.tool()
+async def analyze_ticker(ticker: str) -> str:
+    ...
+```
+
+The same applies to any other CPU-bound or import-heavy work. If you must do blocking work inside a tool, offload it with `asyncio.to_thread()`.
+
+---
+
+### Rule 2 — Always pass `stdin=subprocess.DEVNULL` to subprocess calls
+
+**What goes wrong:** The MCP server communicates with Claude over **stdio** — its stdin is an IOCP overlapped pipe managed by `anyio`. When a child process (`git`, `pytest`, etc.) is spawned without redirecting stdin, it **inherits that pipe handle**. While the child holds the handle open, `anyio`'s async stdin reader is permanently blocked, so the tool call never returns.
+
+**The rule:** Every `subprocess.run()` (or `subprocess.Popen`) call in this server must include `stdin=subprocess.DEVNULL`. Additionally, wrap subprocess calls in `asyncio.to_thread()` so they don't block the event loop.
+
+```python
+# WRONG — child inherits the IOCP pipe, anyio stdin reader hangs forever
+result = subprocess.run(["git", "log"], capture_output=True, text=True)
+
+# CORRECT — pipe is closed for the child; subprocess runs off the event loop
+result = await asyncio.to_thread(
+    subprocess.run,
+    ["git", "log"],
+    capture_output=True,
+    text=True,
+    stdin=subprocess.DEVNULL,
+)
+```
+
+---
+
+### Summary checklist for adding a new tool
+
+| Concern | Required action |
+|---|---|
+| Heavy imports (pandas, yfinance, etc.) | Move to module level — never inside the tool function |
+| CPU-bound or blocking work | Wrap with `asyncio.to_thread()` |
+| Any `subprocess.run()` call | Add `stdin=subprocess.DEVNULL` + wrap in `asyncio.to_thread()` |
+| Tool function signature | Use `async def` — FastMCP natively awaits tool coroutines |
+
+---
+
 ## Changelog
 
 ### v0.1.3 — 2026-03-19
