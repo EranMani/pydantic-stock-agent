@@ -10,9 +10,11 @@ call it without triggering redundant network requests.
 """
 
 import asyncio
+import re
 from functools import lru_cache
 
 import yfinance as yf
+from duckduckgo_search import DDGS
 
 
 async def fetch_valuation_metrics(ticker: str) -> dict[str, float | None]:
@@ -67,16 +69,44 @@ async def fetch_industry_peers(ticker: str) -> list[str]:
 
 
 async def fetch_company_name(ticker: str) -> str:
-    """Fetch the full company name for a ticker via yfinance.
+    """Fetch the full company name for a ticker via yfinance, with DuckDuckGo fallback.
 
-    Returns the longName field (e.g. 'ONDS' → 'Ondas Holdings Inc.'). Falls back
-    to the ticker symbol itself if longName is missing — ensures the caller always
-    receives a usable string for news search queries and agent prompts.
+    Primary: yfinance longName field (e.g. 'ONDS' → 'Ondas Holdings Inc.').
+    Fallback: DuckDuckGo search for '{ticker} stock' when longName is missing —
+    prevents raw ticker strings from corrupting downstream news search queries.
+    Last resort: the ticker symbol itself if both sources fail.
     Uses the shared _get_ticker_info cache — no extra HTTP call if called after
     fetch_valuation_metrics or fetch_earnings_growth for the same ticker.
     """
     info: dict = await asyncio.to_thread(_get_ticker_info, ticker)
-    return info.get("longName") or ticker
+    name = info.get("longName")
+    if name:
+        return name
+    return await _search_company_name_ddg(ticker)
+
+
+async def _search_company_name_ddg(ticker: str) -> str:
+    """Resolve a company name via DuckDuckGo when yfinance longName is unavailable.
+
+    Runs a single DuckDuckGo text search in a thread pool (blocking call) and
+    strips the parenthetical ticker suffix from the result title, e.g.:
+      'Nebius Group N.V. (NBIS) Stock Price...' → 'Nebius Group N.V.'
+    Falls back to the ticker symbol itself on any error or empty result.
+    """
+    def _search() -> str:
+        # Blocking DuckDuckGo HTTP call — must run in a thread pool
+        results = DDGS().text(f"{ticker} stock", max_results=1)
+        if not results:
+            return ticker
+        title = results[0].get("title", "")
+        # Strip ' (TICKER) ...' suffix produced by financial sites
+        cleaned = re.sub(r"\s*\(.*?\).*", "", title).strip()
+        return cleaned or ticker
+
+    try:
+        return await asyncio.to_thread(_search)
+    except Exception:
+        return ticker
 
 
 @lru_cache(maxsize=128)
