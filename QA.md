@@ -593,6 +593,60 @@ This should be implemented in `fetch_industry_peers()` in `yf_client.py` as a la
 
 ---
 
+### Q: Why is `_fetch_history` decorated with `@lru_cache`, and what does that mean?
+
+`lru_cache` (Least Recently Used cache) memoizes a function's return value keyed by its arguments. The first call with a given ticker executes the function and stores the result in memory. Every subsequent call with the same argument returns the cached result instantly — no code runs again.
+
+```python
+_fetch_history("AAPL")  # hits yfinance HTTP → result stored in cache
+_fetch_history("AAPL")  # returns cached DataFrame, zero network I/O
+_fetch_history("MSFT")  # different arg → new HTTP call → stored separately
+```
+
+**Why `_fetch_history` specifically, and not `fetch_ohlcv`?**
+Two reasons:
+1. `_fetch_history` is the actual bottleneck — it is the one making the blocking HTTP call to yfinance. Caching it prevents redundant network round trips at the source.
+2. `lru_cache` does not work on `async def` functions — it cannot intercept a coroutine's result. `_fetch_history` is a plain `def`, so the decorator works correctly on it.
+
+**Is the cache per user or per server?**
+Per server (process-level). `lru_cache` is an in-memory dictionary attached to the function object itself — there is no concept of "user" at this level. If User A fetches AAPL, User B requesting AAPL immediately after gets the cached result. The cache persists as long as the Python process is running. A process restart clears it entirely.
+
+**The main scenario this solves in this project:**
+During a peer analysis run, the same ticker can be requested multiple times — once as the primary subject, and again if it appears in another ticker's peer list. Without the cache, each request triggers an identical HTTP call. With the cache, only the first call hits the network.
+
+---
+
+### Q: What is `cachetools.TTLCache` and when would we use it instead of `lru_cache`?
+
+`lru_cache` has one meaningful limitation for financial data: **it never expires**. If AAPL was fetched at 9am and a user requests it again at 3pm, they receive the 9am data — the cache has no concept of staleness.
+
+`cachetools.TTLCache` solves this with a time-to-live (TTL) per entry:
+
+```python
+from cachetools import TTLCache, cached
+
+# Cache up to 128 tickers; each entry expires after 15 minutes
+_history_cache: TTLCache = TTLCache(maxsize=128, ttl=900)
+
+@cached(cache=_history_cache)
+def _fetch_history(ticker: str) -> pd.DataFrame:
+    return yf.Ticker(ticker).history(period="2y")
+```
+
+After `ttl` seconds, the entry is evicted automatically. The next call fetches fresh data from yfinance and repopulates the cache.
+
+**Why we use `lru_cache` now and not `TTLCache`:**
+The current protocol scope uses `_fetch_history` primarily for deduplication within a single analysis run — not for long-session caching across many user requests. `lru_cache` is sufficient for that, requires no extra dependency, and keeps the implementation simple.
+
+`TTLCache` becomes the right choice when:
+- The server is long-lived and serves many users over hours
+- Data freshness matters (intraday analysis, live dashboards)
+- The cache needs to auto-refresh without a process restart
+
+This would be the upgrade path for a production deployment.
+
+---
+
 ### Q: What should the frontend display when `pe_ratio` is None?
 `pe_ratio` returns `None` from yfinance when the company has no earnings (i.e. not yet profitable — e.g. early-stage biotech, high-growth pre-profit tech). This has a specific financial meaning and must be communicated clearly to the user.
 

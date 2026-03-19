@@ -9,6 +9,7 @@ to keep the event loop free during network I/O.
 """
 
 import asyncio
+from functools import lru_cache
 
 import pandas as pd
 import yfinance as yf
@@ -54,6 +55,11 @@ def validate_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+@lru_cache(maxsize=128)
 def _fetch_history(ticker: str) -> pd.DataFrame:
-    """Synchronous helper that calls yfinance — intended for use via asyncio.to_thread() only."""
+    """Synchronous helper that calls yfinance — intended for use via asyncio.to_thread() only.
+
+    Cached with lru_cache to avoid redundant HTTP calls when the same ticker is
+    requested multiple times within a single analysis run (e.g. peer comparison).
+    """
     return yf.Ticker(ticker).history(period="2y")
