@@ -11,6 +11,16 @@ appended by add_moving_averages() before any function here is called.
 import pandas as pd
 
 
+def ma200_trending_up(df: pd.DataFrame, lookback_days: int = 20) -> bool:
+    """Return True if SMA_200 today is strictly higher than it was lookback_days ago.
+
+    A rising 200-day MA confirms sustained institutional accumulation over months.
+    A flat or declining 200-day MA is a warning sign even if price is still above it.
+    """
+    # Requires at least lookback_days + 1 rows of SMA_200 data
+    return bool(df["SMA_200"].iloc[-1] > df["SMA_200"].iloc[-lookback_days])
+
+
 def price_above_mas(df: pd.DataFrame) -> bool:
     """Return True if the latest close is strictly above both SMA_150 and SMA_200.
 
