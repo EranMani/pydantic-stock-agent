@@ -39,6 +39,15 @@ METRIC_WEIGHTS: dict[str, float] = {
     "beta": 0.1,
 }
 
+# Base weights for each technical indicator — re-normalised dynamically by the
+# scorer based on which indicators are active in the ScoringStrategy
+INDICATOR_WEIGHTS: dict[str, float] = {
+    "trend_template": 0.5,
+    "vcp": 0.3,
+    "macd": 0.1,
+    "moving_averages": 0.1,
+}
+
 # Normalisation ranges for fundamental metric sub-scoring.
 # Each entry is (max_value, higher_is_better).
 # Calibrated for balanced/growth strategies — see QA.md for future scoring_profile enhancement.

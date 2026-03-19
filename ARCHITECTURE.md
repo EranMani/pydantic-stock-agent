@@ -91,4 +91,107 @@ The raw value (e.g. P/E = 15) never flows through to the final score directly �
 
 ---
 
+---
+
+## Phase 3 & 4 — Technical Data Pipeline
+
+### Full Technical Pipeline Flow
+
+How a ticker symbol becomes a `TechnicalData` object with a score in `[1.0, 10.0]`.
+
+```mermaid
+flowchart TD
+    A([ticker: str]) --> B
+
+    subgraph Fetch ["core_data.py — Fetch & Validate"]
+        B["fetch_ohlcv(ticker)\nasyncio.to_thread → _fetch_history (lru_cache)"]
+        B --> C["validate_ohlcv(df)\n• check required columns\n• ffill().bfill() NaN\n• raise ValueError if rows < 200"]
+    end
+
+    C --> D
+
+    subgraph Enrich ["indicators/ — Enrich DataFrame (Chain of Responsibility)"]
+        D["add_moving_averages(df)\n→ appends SMA_50, SMA_150, SMA_200"]
+        D --> E["add_macd(df)  ← only if 'macd' in strategy\n→ appends MACD_12_26_9, MACDs_12_26_9, MACDh_12_26_9"]
+        E --> F["calculate_52_week_levels(df)\n→ returns (high_52w, low_52w) from last 252 rows"]
+    end
+
+    F --> G
+
+    subgraph Checks ["trend_setups.py — Boolean Signals"]
+        G["price_above_mas(df)\nclose > SMA_150 AND close > SMA_200"]
+        G --> H["ma200_trending_up(df)\nSMA_200 today > SMA_200 20 days ago"]
+        H --> I["ma50_above_ma150_and_ma200(df)\nSMA_50 > SMA_150 AND SMA_50 > SMA_200"]
+        I --> J["check_trend_template(df)\nAll 5 Minervini conditions — True only if ALL pass"]
+        I --> K["detect_vcp(df)\n60 bars → 3 windows → each range strictly narrower"]
+        I --> L["detect_volume_dryup(df)\nlatest volume < 70% of 50-day average"]
+    end
+
+    J & K & L --> M
+
+    subgraph Score ["technical_scorer.py — Score"]
+        M["Active indicators from strategy.technical_indicators\nbool → 1.0 / 0.0 per indicator"]
+        M --> N["Re-normalise INDICATOR_WEIGHTS\nso active weights always sum to 1.0"]
+        N --> O["weighted_sum = Σ signal × normalised_weight\n→ 0.0 to 1.0"]
+        O --> P["Scale: 1.0 + weighted_sum × 9.0\nClamp to 1.0–10.0"]
+    end
+
+    P --> Q([TechnicalData\nsma_50, sma_150, sma_200\nhigh_52w, low_52w\ntrend_template_passed, vcp_detected\nscore: float])
+```
+
+---
+
+### Chain of Responsibility — DataFrame Enrichment
+
+Each module appends its columns and passes the same DataFrame forward. No module fetches data independently — all read from the single enriched object.
+
+```
+fetch_ohlcv()                    → Open, High, Low, Close, Volume
+  → add_moving_averages()        → + SMA_50, SMA_150, SMA_200
+      → add_macd()               → + MACD_12_26_9, MACDs_12_26_9, MACDh_12_26_9
+          → boolean checks       →   read all columns above, return True/False
+              → calculate_technical_score()  → TechnicalData with score
+```
+
+**Why this pattern:**
+- No module needs to know where prior columns came from
+- Nothing is fetched or computed twice
+- Adding a new indicator = add a new module, append to the chain — no other file changes
+
+---
+
+### `lru_cache` on `_fetch_history`
+
+`_fetch_history` is decorated with `@lru_cache(maxsize=128)`. It is the only function cached because:
+1. It is the sole source of blocking HTTP I/O — caching at this layer prevents all redundant network calls
+2. `lru_cache` requires a plain `def` — it cannot wrap `async def` functions
+
+The cache is **process-level** (shared across all users for the lifetime of the server process). Primary use case: peer analysis runs where the same ticker may be requested multiple times within a single analysis. Production upgrade path: replace with `cachetools.TTLCache` to add staleness expiry.
+
+---
+
+### Technical Scoring — Weight Re-normalisation
+
+Mirrors the fundamental scorer's approach. Only indicators listed in `strategy.technical_indicators` are active. Their base weights (from `INDICATOR_WEIGHTS` in `config.py`) are re-normalised so they always sum to 1.0:
+
+```
+Default INDICATOR_WEIGHTS:
+  trend_template: 0.5
+  vcp:            0.3
+  macd:           0.1
+  moving_averages: 0.1
+
+Strategy: ["trend_template", "vcp"] only
+  active total = 0.5 + 0.3 = 0.8
+  re-normalised:
+    trend_template: 0.5 / 0.8 = 0.625
+    vcp:            0.3 / 0.8 = 0.375
+                               ──────
+                                1.000 ✓
+```
+
+A strategy with only `["trend_template"]` produces the same score regardless of VCP result — VCP is not in scope, its weight is zero.
+
+---
+
 *More diagrams will be added as phases are built.*
