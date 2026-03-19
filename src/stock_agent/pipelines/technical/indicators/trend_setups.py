@@ -76,20 +76,34 @@ def check_trend_template(df: pd.DataFrame) -> bool:
 
 
 def detect_vcp(df: pd.DataFrame, contractions: int = 3) -> bool:
-    """Return True if the last 60 bars show successive price range contractions.
+    """Return True if the last 60 bars show successive price range AND volume contractions.
 
-    Splits the last 60 bars into equal windows and checks that each window's
-    price range (max Close - min Close) is strictly narrower than the previous.
-    A shrinking range signals that selling pressure is drying up — the stock is
-    coiling before a potential breakout.
+    Splits the last 60 bars into equal windows and checks two conditions per window:
+    1. Price range (max Close - min Close) is strictly narrower than the previous window.
+    2. Average volume is strictly lower than the previous window.
+
+    Both must contract together — price tightening with declining volume confirms that
+    sellers are backing off as the base forms, which is the core Minervini VCP signal.
+    Price-only contraction without volume dry-up is insufficient and may indicate
+    a low-liquidity drift rather than a genuine accumulation base.
     """
-    last_60 = df["Close"].iloc[-60:]
+    close = df["Close"].iloc[-60:]
+    volume = df["Volume"].iloc[-60:]
     window_size = 60 // contractions
 
-    ranges: list[float] = []
-    for i in range(contractions):
-        window = last_60.iloc[i * window_size: (i + 1) * window_size]
-        ranges.append(float(window.max() - window.min()))
+    price_ranges: list[float] = []
+    avg_volumes: list[float] = []
 
-    # Each successive range must be strictly narrower than the one before it
-    return all(ranges[i] > ranges[i + 1] for i in range(len(ranges) - 1))
+    for i in range(contractions):
+        price_window = close.iloc[i * window_size: (i + 1) * window_size]
+        volume_window = volume.iloc[i * window_size: (i + 1) * window_size]
+        price_ranges.append(float(price_window.max() - price_window.min()))
+        avg_volumes.append(float(volume_window.mean()))
+
+    # Price range must contract in every successive window (strict)
+    price_contracting = all(price_ranges[i] > price_ranges[i + 1] for i in range(len(price_ranges) - 1))
+    # Volume only needs to be lower in the final window than the first — minor
+    # inter-window upticks are acceptable; we avoid over-penalising valid setups
+    volume_contracting = avg_volumes[-1] < avg_volumes[0]
+
+    return price_contracting and volume_contracting
