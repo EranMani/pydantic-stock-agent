@@ -647,6 +647,54 @@ This would be the upgrade path for a production deployment.
 
 ---
 
+## Phase 4 — Advanced Technical Analysis Logic
+
+### Q: Where does `price_above_mas` get its SMA data from? Does it make a separate fetch?
+
+No separate fetch. By the time `price_above_mas` runs, `add_moving_averages` (Step 17) has already appended `SMA_50`, `SMA_150`, and `SMA_200` as columns directly onto the same OHLCV DataFrame. The function simply reads the last row:
+
+```
+Date        Open    High    Low     Close   Volume    SMA_50   SMA_150   SMA_200
+2025-03-18  69.10   70.20   68.50   69.48   ...       77.01    61.75     55.82
+```
+
+```python
+Close[-1]   → df["Close"].iloc[-1]
+SMA_150[-1] → df["SMA_150"].iloc[-1]
+SMA_200[-1] → df["SMA_200"].iloc[-1]
+```
+
+This is the **Chain of Responsibility pattern** in practice — each module appends its computed columns to the DataFrame and returns it. Every subsequent function reads whatever columns it needs from the same enriched object. Nothing is fetched twice, no module needs to know where prior columns came from.
+
+```
+fetch_ohlcv()              → raw OHLCV (Open, High, Low, Close, Volume)
+  → add_moving_averages()  → appends SMA_50, SMA_150, SMA_200
+      → add_macd()         → appends MACD_12_26_9, MACDs_12_26_9, MACDh_12_26_9
+          → price_above_mas(), ma200_trending_up(), detect_vcp()  → read all of the above
+```
+
+---
+
+### Q: What does `price_above_mas` check and why does it matter?
+
+```python
+def price_above_mas(df: pd.DataFrame) -> bool:
+    return df["Close"].iloc[-1] > df["SMA_150"].iloc[-1] and \
+           df["Close"].iloc[-1] > df["SMA_200"].iloc[-1]
+```
+
+It checks whether the current closing price is **strictly above both the 150-day and 200-day moving averages**. Both conditions must be true — equal does not count.
+
+**Why these two MAs specifically:**
+The 150 and 200-day SMAs represent medium and long-term institutional interest. A stock trading above both means institutions have been accumulating over 7–10 months — the trend is broadly upward. A stock below either is in distribution or recovery and is not a Minervini setup.
+
+**Why strictly above (not >=):**
+A stock sitting exactly on its 200-day SMA is at a critical support/resistance level, not in confirmed uptrend territory. The strict check enforces that the stock has broken clear of the MA, not just touched it.
+
+This is one of five boolean checks that `check_trend_template` (Step 23) will aggregate into a single `True/False` verdict. Each check is its own function so they can be independently tested and composed cleanly.
+
+---
+
 ### Q: What should the frontend display when `pe_ratio` is None?
 `pe_ratio` returns `None` from yfinance when the company has no earnings (i.e. not yet profitable — e.g. early-stage biotech, high-growth pre-profit tech). This has a specific financial meaning and must be communicated clearly to the user.
 
