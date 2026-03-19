@@ -47,3 +47,7 @@ logfire-traces/
 
 # Claude Code — local settings are machine-specific, never commit
 .claude/settings.local.json
+
+
+# Custom
+INTERVIEW_PREP.md
