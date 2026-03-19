@@ -2,9 +2,15 @@
 
 All yfinance calls are synchronous and blocking — each function wraps them
 with asyncio.to_thread() so the event loop remains free during network I/O.
+
+_get_ticker_info is decorated with @lru_cache so all callers within a single
+analysis run share one cached HTTP response — fetch_valuation_metrics,
+fetch_earnings_growth, fetch_industry_peers, and fetch_company_name all
+call it without triggering redundant network requests.
 """
 
 import asyncio
+from functools import lru_cache
 
 import yfinance as yf
 
@@ -60,6 +66,25 @@ async def fetch_industry_peers(ticker: str) -> list[str]:
         return []
 
 
+async def fetch_company_name(ticker: str) -> str:
+    """Fetch the full company name for a ticker via yfinance.
+
+    Returns the longName field (e.g. 'ONDS' → 'Ondas Holdings Inc.'). Falls back
+    to the ticker symbol itself if longName is missing — ensures the caller always
+    receives a usable string for news search queries and agent prompts.
+    Uses the shared _get_ticker_info cache — no extra HTTP call if called after
+    fetch_valuation_metrics or fetch_earnings_growth for the same ticker.
+    """
+    info: dict = await asyncio.to_thread(_get_ticker_info, ticker)
+    return info.get("longName") or ticker
+
+
+@lru_cache(maxsize=128)
 def _get_ticker_info(ticker: str) -> dict:
-    """Synchronous helper that calls yfinance — intended for use via asyncio.to_thread() only."""
+    """Synchronous helper that calls yfinance — intended for use via asyncio.to_thread() only.
+
+    @lru_cache ensures all callers within a process share one cached response per ticker,
+    eliminating redundant HTTP round trips across fetch_valuation_metrics,
+    fetch_earnings_growth, fetch_industry_peers, and fetch_company_name.
+    """
     return yf.Ticker(ticker).info
