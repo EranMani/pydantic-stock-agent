@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "stock-devops": {
+      "command": "uv",
+      "args": ["run", "python", "stock_mcp_server.py"],
+      "cwd": "D:/AI/_My_Projects/pydantic-stock-agent"
+    }
+  }
+}

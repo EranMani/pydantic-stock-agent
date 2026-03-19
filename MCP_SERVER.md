@@ -6,9 +6,9 @@ A Model Context Protocol server that exposes the stock analysis pipeline and dev
 
 ## Setup
 
-### 1. Add to Claude Code config
+### 1. Project MCP config
 
-Add the following entry to `~/.claude/claude.json` under `mcpServers`:
+The server is configured via `.mcp.json` at the project root (already checked in). Claude Code automatically detects this file when opening the project directory:
 
 ```json
 {
