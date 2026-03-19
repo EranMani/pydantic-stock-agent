@@ -116,6 +116,17 @@ EOSE     1.00   FAIL            False    $5.28
 
 ## Changelog
 
+### v0.1.2 — 2026-03-19
+
+**Bug fix — heavy imports at module level caused 5+ minute MCP server startup**
+
+#### Fixed
+- Moved `from stock_agent.models.context import ScoringStrategy`, `from stock_agent.pipelines.technical.core_data import fetch_ohlcv`, and `from stock_agent.scoring.technical_scorer import calculate_technical_score` from module-level into `_async_analyze_ticker` and `_async_compare_tickers` — the two functions that actually need them. This reduces server startup from 5+ minutes to ~2 seconds, making `get_current_step` and `run_tests` usable immediately without waiting for pandas/yfinance/pandas-ta to load.
+
+**Tools unaffected:** Behaviour of all 4 tools is unchanged; only the import timing changed.
+
+---
+
 ### v0.1.1 — 2026-03-19
 
 **Bug fix — async tools crash under FastMCP's running event loop**

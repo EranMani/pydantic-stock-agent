@@ -14,11 +14,6 @@ from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
-from stock_agent.models.context import ScoringStrategy
-from stock_agent.pipelines.technical.core_data import fetch_ohlcv
-from stock_agent.pipelines.technical.indicators.moving_averages import add_moving_averages
-from stock_agent.scoring.technical_scorer import calculate_technical_score
-
 # Server name shown in Claude's tool list
 mcp = FastMCP("stock-devops")
 
@@ -107,6 +102,11 @@ async def analyze_ticker(ticker: str) -> str:
 
 async def _async_analyze_ticker(ticker: str) -> str:
     """Async implementation — fetches and scores a single ticker."""
+    # Heavy imports deferred to avoid slow MCP server startup
+    from stock_agent.models.context import ScoringStrategy
+    from stock_agent.pipelines.technical.core_data import fetch_ohlcv
+    from stock_agent.scoring.technical_scorer import calculate_technical_score
+
     df = await fetch_ohlcv(ticker)
     strategy = ScoringStrategy()  # default: trend_template + vcp
     data = calculate_technical_score(df, strategy)
@@ -145,6 +145,11 @@ async def compare_tickers(tickers: list[str]) -> str:
 
 async def _async_compare_tickers(tickers: list[str]) -> str:
     """Async implementation — fetches and scores all tickers concurrently."""
+    # Heavy imports deferred to avoid slow MCP server startup
+    from stock_agent.models.context import ScoringStrategy
+    from stock_agent.pipelines.technical.core_data import fetch_ohlcv
+    from stock_agent.scoring.technical_scorer import calculate_technical_score
+
     strategy = ScoringStrategy()
 
     async def _score_one(ticker: str) -> tuple[str, float, bool, bool, float]:
