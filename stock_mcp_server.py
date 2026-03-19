@@ -33,11 +33,27 @@ import subprocess
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
+from pydantic_ai import Agent as _PydanticAIAgent
+from pydantic_ai.models.openai import OpenAIModel as _OpenAIModel
+from pydantic_ai.providers.openai import OpenAIProvider as _OpenAIProvider
 
 # Pipeline modules — imported at module level so the event loop is never blocked
 # during tool execution. The ~2s import cost is paid once before anyio.run() starts.
+from stock_agent.config import settings as _settings
 from stock_agent.models.context import ScoringStrategy
+from stock_agent.models.report import FundamentalData
+from stock_agent.pipelines.fundamental.web_search import (
+    extract_risk_flags,
+    search_recent_catalysts,
+    search_risk_news,
+)
+from stock_agent.pipelines.fundamental.yf_client import (
+    fetch_company_name,
+    fetch_earnings_growth,
+    fetch_valuation_metrics,
+)
 from stock_agent.pipelines.technical.core_data import fetch_ohlcv
+from stock_agent.scoring.fundamental_scorer import calculate_fundamental_score
 from stock_agent.scoring.technical_scorer import calculate_technical_score
 
 # Server name shown in Claude's tool list
@@ -203,6 +219,140 @@ async def run_tests() -> str:
     )
     output = result.stdout + result.stderr
     return output.strip() if output.strip() else "No output from pytest."
+
+
+# ---------------------------------------------------------------------------
+# Tool 5 — inspect_ticker
+# ---------------------------------------------------------------------------
+
+# Prompt template for the local Ollama NLP sub-agent.
+# Defined at module level — avoids reconstructing the string on every call.
+_OLLAMA_SUMMARIZE_PROMPT = (
+    "You are a financial news analyst. Read the following news snippets about a company "
+    "and produce:\n"
+    "1. A brief one-paragraph summary of recent developments and catalysts.\n"
+    "2. A list of concrete risk events (lawsuits, SEC investigations, recalls, fines, "
+    "bankruptcy signals). Leave the list empty if none are found.\n\n"
+    "Be factual and concise. Do not invent information not present in the snippets.\n\n"
+    "Articles:\n{articles}"
+)
+
+
+@mcp.tool()
+async def inspect_ticker(ticker: str) -> str:
+    """Full pipeline inspection: fundamentals + technicals + MA signal + Ollama news summary.
+
+    Mirrors scripts/test_agent_wiring.py — runs all four data paths mid-conversation
+    without switching to a terminal. Useful for validating pipeline wiring after a
+    build step or checking a ticker before committing an analysis run.
+
+    Phase 1 (concurrent): company name, valuation metrics, earnings growth, OHLCV.
+    Phase 2 (sequential): news search (requires company name from phase 1).
+    Ollama summary degrades gracefully to raw headlines if the local server is offline.
+    """
+    strategy = ScoringStrategy()
+
+    # Phase 1 — four independent fetches, all in parallel
+    company_name, valuation, growth, df = await asyncio.gather(
+        fetch_company_name(ticker),
+        fetch_valuation_metrics(ticker),
+        fetch_earnings_growth(ticker),
+        fetch_ohlcv(ticker),
+    )
+
+    # Fundamental scoring — mirrors get_fundamental_data tool logic
+    temp = FundamentalData(
+        pe_ratio=valuation["pe_ratio"],
+        beta=valuation["beta"],
+        market_cap=valuation["market_cap"],
+        revenue_growth=growth["revenue_growth"],
+        score=0.0,
+    )
+    f_score = calculate_fundamental_score(temp, strategy)
+
+    # Technical scoring — full pipeline, returns TechnicalData with all MA values
+    tech_data = calculate_technical_score(df, strategy)
+    close = float(df["Close"].iloc[-1])
+
+    # Phase 2 — news search (company_name resolved above)
+    catalysts, risks = await asyncio.gather(
+        search_recent_catalysts(ticker, company_name),
+        search_risk_news(ticker, company_name),
+    )
+    all_articles = catalysts + risks
+    det_flags = extract_risk_flags(all_articles)
+
+    # Ollama news summary — graceful fallback if server is offline or model not loaded
+    if not all_articles:
+        news_summary = "No recent news found."
+    else:
+        prompt = _OLLAMA_SUMMARIZE_PROMPT.format(
+            articles="\n---\n".join(all_articles[:20])
+        )
+        try:
+            ollama_model = _OpenAIModel(
+                "llama3.2",
+                provider=_OpenAIProvider(
+                    base_url=f"{_settings.OLLAMA_HOST}/v1",
+                    api_key="ollama",  # placeholder — Ollama ignores auth
+                ),
+            )
+            result = await _PydanticAIAgent(ollama_model).run(prompt)
+            news_summary = result.output
+        except Exception:
+            # Ollama offline or model not loaded — fall back to raw headlines
+            news_summary = "Ollama unavailable — raw headlines:\n" + "\n".join(
+                f"  • {a[:150]}" for a in all_articles[:10]
+            )
+
+    # --- Format output ---
+    pe_str = f"{temp.pe_ratio:.2f}" if temp.pe_ratio is not None else "N/A"
+    beta_str = f"{temp.beta:.2f}" if temp.beta is not None else "N/A"
+    mktcap_str = f"${temp.market_cap:.2e}" if temp.market_cap is not None else "N/A"
+    rev_str = f"{temp.revenue_growth:.1%}" if temp.revenue_growth is not None else "N/A"
+    trend_str = "PASS" if tech_data.trend_template_passed else "FAIL"
+
+    # MA signal — derived from TechnicalData (already computed by calculate_technical_score)
+    above_50 = close > tech_data.sma_50
+    above_200 = close > tech_data.sma_200
+    pct_vs_50 = abs(close - tech_data.sma_50) / tech_data.sma_50
+    pct_vs_200 = abs(close - tech_data.sma_200) / tech_data.sma_200
+
+    risk_section = (
+        "\nRisk Flags:\n" + "\n".join(f"  • {f}" for f in det_flags)
+        if det_flags
+        else "\nRisk Flags: none detected"
+    )
+
+    sep = "=" * (len(ticker) + len(company_name) + 4)
+    return (
+        f"{ticker} — {company_name}\n"
+        f"{sep}\n\n"
+        f"FUNDAMENTALS  (score: {f_score:.2f} / 10)\n"
+        f"  P/E Ratio:       {pe_str}\n"
+        f"  Beta:            {beta_str}\n"
+        f"  Market Cap:      {mktcap_str}\n"
+        f"  Revenue Growth:  {rev_str}\n\n"
+        f"TECHNICALS  (score: {tech_data.score:.2f} / 10)\n"
+        f"  Last Close:      ${close:.2f}\n"
+        f"  SMA 50:          ${tech_data.sma_50:.2f}\n"
+        f"  SMA 150:         ${tech_data.sma_150:.2f}\n"
+        f"  SMA 200:         ${tech_data.sma_200:.2f}\n"
+        f"  52w High:        ${tech_data.high_52w:.2f}\n"
+        f"  52w Low:         ${tech_data.low_52w:.2f}\n"
+        f"  Trend Template:  {trend_str}\n"
+        f"  VCP Detected:    {tech_data.vcp_detected}\n\n"
+        f"MA SIGNAL\n"
+        f"  vs SMA 50:   {'above' if above_50 else 'below'} "
+        f"by {pct_vs_50:.1%}\n"
+        f"  vs SMA 200:  {'above' if above_200 else 'below'} "
+        f"by {pct_vs_200:.1%}\n"
+        f"  SMA 50 vs SMA 200: "
+        f"{'above' if tech_data.sma_50 > tech_data.sma_200 else 'below'}\n\n"
+        f"NEWS SUMMARY\n"
+        f"  {news_summary}"
+        f"{risk_section}"
+    )
 
 
 # ---------------------------------------------------------------------------

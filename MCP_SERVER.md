@@ -114,6 +114,55 @@ EOSE     1.00   FAIL            False    $5.28
 
 ---
 
+### `inspect_ticker`
+
+**Purpose:** Full pipeline wiring test for a single ticker — fundamentals, technicals, MA signal, and Ollama news summary in one call. Mirrors `scripts/test_agent_wiring.py` but runs mid-conversation without any terminal switching. Useful for validating pipeline wiring after a build step or spot-checking a ticker.
+
+**Inputs:**
+| Parameter | Type | Description |
+|---|---|---|
+| `ticker` | `str` | Stock ticker symbol (e.g. `"ONDS"`) |
+
+**Data sources (phase 1, concurrent):** company name, valuation metrics, earnings growth, OHLCV
+**Data sources (phase 2, after company name):** news catalysts + risk articles → Ollama `llama3.2` summary
+**Ollama behaviour:** degrades gracefully — falls back to raw DuckDuckGo headlines if `OLLAMA_HOST` is unreachable or the model is not loaded.
+
+**Output:** Multi-section formatted report:
+```
+ONDS — Ondas Holdings Inc.
+==========================
+
+FUNDAMENTALS  (score: 3.50 / 10)
+  P/E Ratio:       N/A
+  Beta:            1.85
+  Market Cap:      $1.23e+08
+  Revenue Growth:  +12.4%
+
+TECHNICALS  (score: 10.00 / 10)
+  Last Close:      $10.83
+  SMA 50:          $9.71
+  SMA 150:         $7.84
+  SMA 200:         $6.92
+  52w High:        $11.40
+  52w Low:         $1.36
+  Trend Template:  PASS
+  VCP Detected:    True
+
+MA SIGNAL
+  vs SMA 50:   above by 11.5%
+  vs SMA 200:  above by 56.5%
+  SMA 50 vs SMA 200: above
+
+NEWS SUMMARY
+  Ondas Holdings recently announced...
+
+Risk Flags: none detected
+```
+
+**When Claude uses it:** After implementing a build step that touches the pipeline, validating a ticker before committing, or checking whether Ollama is online and loaded.
+
+---
+
 ## Windows Compatibility Notes
 
 FastMCP uses `anyio` under the hood to run its event loop and flush tool responses to stdout via a **zero-capacity memory stream rendezvous** — both sides (writer and reader) must be ready at the same moment for the flush to complete. On Linux/macOS this is forgiving; on Windows it is not, because Windows uses **IOCP (I/O Completion Ports)** for async I/O, which is less tolerant of event-loop stalls. Two categories of mistakes will silently hang every tool call on Windows:
@@ -179,6 +228,23 @@ result = await asyncio.to_thread(
 ---
 
 ## Changelog
+
+### v0.2.0 — 2026-03-20
+
+**New tool — `inspect_ticker`: full pipeline wiring test mid-conversation**
+
+#### Added
+- `inspect_ticker(ticker)` — runs all four data paths (fundamentals, technicals, MA signal, Ollama news) concurrently against a single ticker and returns a formatted multi-section report. Mirrors `scripts/test_agent_wiring.py` without requiring a terminal switch.
+
+#### Implementation details
+- Phase 1 fetches (`fetch_company_name`, `fetch_valuation_metrics`, `fetch_earnings_growth`, `fetch_ohlcv`) are fired concurrently via `asyncio.gather`.
+- Phase 2 news search (`search_recent_catalysts` + `search_risk_news`) follows after `company_name` resolves — it is a required parameter for news query construction.
+- MA signal is derived from `TechnicalData` returned by `calculate_technical_score` — no duplicate OHLCV fetch or separate `add_moving_averages` call needed.
+- Ollama `llama3.2` is constructed inline via `OpenAIModel` + `OpenAIProvider` (Ollama's OpenAI-compatible API). Same pattern as `fundamental_tools.get_ollama_agent()` but without importing the tool module (which would trigger `_resolve_model()` and require a cloud API key).
+- `extract_risk_flags` (deterministic keyword extraction) runs regardless of Ollama availability.
+- All new imports (`pydantic_ai`, `web_search`, `yf_client`, `fundamental_scorer`, `FundamentalData`, `settings`) added at module level per the Windows IOCP rule.
+
+---
 
 ### v0.1.3 — 2026-03-19
 
