@@ -11,6 +11,16 @@ appended by add_moving_averages() before any function here is called.
 import pandas as pd
 
 
+def ma50_above_ma150_and_ma200(df: pd.DataFrame) -> bool:
+    """Return True if SMA_50 is strictly above both SMA_150 and SMA_200 at the latest row.
+
+    Confirms the moving averages are in correct bullish order across all timeframes —
+    short-term trend leading medium and long-term trends upward.
+    """
+    sma_50 = df["SMA_50"].iloc[-1]
+    return bool(sma_50 > df["SMA_150"].iloc[-1] and sma_50 > df["SMA_200"].iloc[-1])
+
+
 def ma200_trending_up(df: pd.DataFrame, lookback_days: int = 20) -> bool:
     """Return True if SMA_200 today is strictly higher than it was lookback_days ago.
 
