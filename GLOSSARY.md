@@ -207,5 +207,23 @@ The practice of deterministically filtering, deduplicating, and structuring data
 ### RISK_KEYWORDS
 A module-level constant list of strings used by `extract_risk_flags()` to filter news snippets. Only snippets containing at least one keyword pass through to the LLM context.
 
+### `@agent.tool`
+PydanticAI decorator that registers an `async def` function as a callable tool on an agent. At decoration time it builds a JSON schema from the function's parameters and adds it to the agent's toolset. `RunContext[T]` parameters are injected by the framework — the LLM never sees them.
+
+### `RunContext[T]`
+The dependency injection context passed as the first parameter to every `@agent.tool` function. `ctx.deps` contains the `AgentDependencies` instance configured for the current run. `T` is the deps type (e.g. `RunContext[AgentDependencies]`).
+
+### `TestModel`
+A PydanticAI model (`pydantic_ai.models.test.TestModel`) that never makes HTTP calls. Used in tests to verify agent wiring, schema validation, and dependency injection without a real API key. Key options: `call_tools=[]` (skip tool calls), `custom_output_args` (provide a valid output dict).
+
+### Lazy Initialisation
+A pattern where an object is not created until the first time it is needed. In this project, `get_ollama_agent()` uses `@lru_cache(maxsize=1)` to defer Ollama agent construction until first use — so the module imports cleanly even when Ollama is offline.
+
+### Heavy Tool vs Lightweight Tool
+A distinction in agentic tool design. **Heavy tools** (e.g. `get_technical_data`) run the full pipeline — expensive, called once. **Lightweight tools** (e.g. `get_moving_average_signal`) return a specific subset of data cheaply — called on demand when the LLM needs to verify a detail without re-running the full pipeline.
+
+### OpenAI-Compatible API
+An API that implements the same endpoint contract as OpenAI's `/v1/chat/completions`. Allows non-OpenAI models (e.g. Ollama, LM Studio) to be used with OpenAI client libraries or pydantic-ai's `OpenAIModel`. Ollama exposes this at `{OLLAMA_HOST}/v1`.
+
 ### `ffill().bfill()` chain
 The standard NaN-cleaning pattern used before passing a DataFrame to any indicator module. `ffill()` fills forward (handles middle/end gaps), `bfill()` fills backward (handles start gaps). Together guarantee zero NaN values.

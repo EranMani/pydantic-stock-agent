@@ -194,4 +194,96 @@ A strategy with only `["trend_template"]` produces the same score regardless of 
 
 ---
 
+---
+
+## Phase 5 — Agent Assembly & Tool Registration
+
+### Tool Registration Flow
+
+How `@agent.tool` decorators wire tools onto the agent at import time, and why imports are deferred to the bottom of `agent.py`.
+
+```mermaid
+flowchart TD
+    A([Python imports stock_agent.agent]) --> B["agent.py top: _resolve_model()"]
+    B --> C["agent = Agent(model, output_type=StockReport, deps_type=AgentDependencies)"]
+    C --> D["import stock_agent.tools.fundamental_tools"]
+    C --> E["import stock_agent.tools.technical_tools"]
+
+    D --> D1["@agent.tool — get_fundamental_data"]
+    D --> D2["@agent.tool — get_peer_reports"]
+    D --> D3["@agent.tool — summarize_news_and_extract_risks"]
+
+    E --> E1["@agent.tool — get_technical_data"]
+    E --> E2["@agent.tool — get_moving_average_signal"]
+
+    D1 & D2 & D3 & E1 & E2 --> F([agent._function_toolset — 5 tools registered])
+```
+
+**Why imports are at the bottom of `agent.py`:**
+Tool files import `agent` from `agent.py`. If `agent.py` also imported tool files at the top, Python would try to import the tool files before `agent` was defined — circular import. Bottom-of-file imports defer the tool registration until after `agent` exists in memory.
+
+---
+
+### Agent Run — Tool Call Flow
+
+How the cloud LLM calls tools during a single `agent.run()` invocation.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Agent as Cloud Agent (OpenAI/Gemini)
+    participant FT as fundamental_tools.py
+    participant TT as technical_tools.py
+    participant Ollama as Ollama Sub-Agent (llama3.2)
+    participant Pipeline as Pipeline (yfinance + pandas-ta)
+
+    User->>Agent: agent.run("Analyse ONDS", deps=AgentDependencies(strategy))
+
+    Agent->>TT: get_technical_data("ONDS")
+    TT->>Pipeline: fetch_ohlcv → calculate_technical_score
+    Pipeline-->>TT: TechnicalData (sma_50, vcp, score)
+    TT-->>Agent: TechnicalData
+
+    Agent->>FT: get_fundamental_data("ONDS")
+    FT->>Pipeline: fetch_valuation_metrics + fetch_earnings_growth
+    Pipeline-->>FT: raw metrics dict
+    FT-->>Agent: FundamentalData (pe_ratio, score)
+
+    Agent->>FT: summarize_news_and_extract_risks("ONDS", "Ondas Holdings")
+    FT->>Pipeline: search_recent_catalysts + search_risk_news (concurrent)
+    Pipeline-->>FT: raw article snippets
+    FT->>Ollama: prompt + articles (cloud agent never sees raw text)
+    Ollama-->>FT: NewsSummary (summary, risk_flags)
+    FT-->>Agent: NewsSummary
+
+    Note over Agent: Optionally calls get_moving_average_signal<br/>if it needs to verify specific MA values
+
+    Agent-->>User: StockReport (ticker, scores, recommendation, summary, peers)
+```
+
+**Key architectural constraint:**
+The cloud agent receives only structured, pre-computed outputs — `TechnicalData`, `FundamentalData`, `NewsSummary`. Raw article text, OHLCV DataFrames, and intermediate calculations never appear in the cloud model's context window.
+
+---
+
+### Heavy vs Lightweight Tool — Decision Boundary
+
+```
+get_technical_data("ONDS")          ← Heavy: full pipeline, called once
+  ↓
+TechnicalData(trend_template=False, score=4.0)
+
+Agent reasoning: "Why did trend_template fail? Is it a near-miss or a real breakdown?"
+
+get_moving_average_signal("ONDS")   ← Lightweight: one fetch + one calculation
+  ↓
+{price: 10.75, sma_50: 10.99}       ← 2.2% below SMA-50 = near-miss
+
+Agent conclusion: "Near-miss on trend template — not a structural breakdown."
+```
+
+Without the lightweight tool, the agent re-runs the full pipeline or reasons blindly from the boolean.
+
+---
+
 *More diagrams will be added as phases are built.*

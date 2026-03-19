@@ -33,6 +33,10 @@ class Settings(BaseSettings):
         default="",
         description="Google Gemini API key for cloud model inference. Used when OPENAI_API_KEY is not set.",
     )
+    OLLAMA_HOST: str = Field(
+        default="http://localhost:11434",
+        description="Ollama server base URL for local LLM inference (llama3.2). Use http://ollama:11434 inside Docker.",
+    )
 
 
 # Module-level singleton — import this throughout the codebase

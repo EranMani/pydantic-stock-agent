@@ -65,10 +65,15 @@ def _resolve_model() -> OpenAIModel | GeminiModel:
     )
 
 
-# Module-level agent instance — tools are registered in Step 26
+# Module-level agent instance — tools registered below via side-effect imports
 agent: Agent[AgentDependencies, StockReport] = Agent(
     _resolve_model(),
     output_type=StockReport,
     deps_type=AgentDependencies,
     system_prompt=SYSTEM_PROMPT,
 )
+
+# Tool registration — imported here to trigger @agent.tool decorators at module load time.
+# Placed after `agent` is defined to avoid circular imports (tool modules import `agent`).
+import stock_agent.tools.fundamental_tools  # noqa: F401, E402
+import stock_agent.tools.technical_tools  # noqa: F401, E402

@@ -746,6 +746,137 @@ Trend Template gives you the watchlist. VCP tells you which ones to act on.
 
 ---
 
+## Phase 5 — Agent Assembly & Tool Registration
+
+### Q: Why does `get_moving_average_signal` exist as a separate tool when `get_technical_data` already returns MA values?
+
+`get_technical_data` runs the full pipeline — fetch OHLCV, run all indicators, score, return `TechnicalData`. It's a heavy, one-time call.
+
+`get_moving_average_signal` is a lightweight follow-up the LLM can choose to call mid-reasoning — for example, to verify *why* `trend_template_passed=False` before writing its summary:
+
+```
+1. Agent calls get_technical_data("ONDS")  → trend_template=False, score=4.0
+2. Agent wants to understand: is the price just barely below SMA-50, or far away?
+3. Agent calls get_moving_average_signal("ONDS")
+   → price=$10.75, sma_50=$10.99  (only 2.2% below — near-miss, not breakdown)
+4. Agent writes: "Near-miss on trend template — price is within 2% of SMA-50..."
+```
+
+Without this tool, the agent either trusts the boolean blindly or re-runs the full pipeline (expensive) to verify one number.
+
+**The principle:** give the agent a toolbox, not a single function. Let it decide how deep to go. Heavy tools give scored structure; lightweight tools give targeted follow-up without re-running the pipeline.
+
+---
+
+### Q: How does PydanticAI tool registration work? What does `@agent.tool` actually do?
+
+`@agent.tool` is a decorator that registers a function on the agent at decoration time (import time). It does three things:
+
+1. **Inspects the function signature** — builds a JSON schema from the parameters. This schema is sent to the LLM so it knows what arguments to pass.
+2. **Registers the tool on the agent** — adds it to the agent's internal toolset.
+3. **Wires up dependency injection** — any parameter typed as `RunContext[AgentDependencies]` is automatically populated by the framework at call time. The LLM never sees it.
+
+```python
+@agent.tool
+async def get_technical_data(ctx: RunContext[AgentDependencies], ticker: str) -> TechnicalData:
+    #                         ^^^^ injected by framework    ^^^^ LLM provides this
+```
+
+The LLM sees the tool as: `get_technical_data(ticker: string)`. `ctx` is invisible to it.
+
+---
+
+### Q: Why are tool modules imported at the bottom of `agent.py` instead of the top?
+
+To avoid a circular import. The chain is:
+
+- `fundamental_tools.py` imports `agent` from `agent.py` (to register tools on it)
+- If `agent.py` also imported `fundamental_tools.py` at the top, Python would hit the import of `fundamental_tools` before `agent` was defined — and `fundamental_tools` would fail trying to import `agent` which doesn't exist yet
+
+By placing the imports at the **bottom** of `agent.py`, after `agent = Agent(...)`, the object exists in memory before the tool files try to reference it:
+
+```python
+# agent.py
+agent = Agent(...)   # defined here
+
+# Tool modules imported here — triggers @agent.tool registration.
+# Placed at the bottom to avoid circular imports.
+import stock_agent.tools.fundamental_tools  # noqa: F401, E402
+import stock_agent.tools.technical_tools
+```
+
+This is a standard Python pattern for circular dependency resolution via deferred imports.
+
+---
+
+### Q: Why is the Ollama sub-agent lazy-initialised with `@lru_cache` instead of at module level?
+
+Two reasons:
+
+1. **Offline resilience** — if Ollama is not running when the server starts, the module still imports cleanly. The Ollama agent is only constructed when a tool actually calls it.
+2. **Singleton reuse** — `@lru_cache(maxsize=1)` ensures only one `Agent` instance is ever created. Without it, every `summarize_news_and_extract_risks` call would create a new `Agent` object.
+
+```python
+@lru_cache(maxsize=1)
+def get_ollama_agent() -> Agent:
+    # Only called on first tool invocation — not at import time
+    return Agent(OpenAIModel("llama3.2", provider=OpenAIProvider(...)), output_type=NewsSummary)
+```
+
+Contrast with module-level instantiation:
+```python
+# ❌ Wrong — crashes at import time if Ollama is offline
+ollama_agent = Agent(OllamaModel("llama3.2"), ...)
+```
+
+---
+
+### Q: Why does pydantic-ai connect to Ollama via `OpenAIProvider` instead of a dedicated `OllamaModel`?
+
+pydantic-ai v1.x has no dedicated Ollama module. Ollama exposes an **OpenAI-compatible REST API** at `/v1/chat/completions` — so pydantic-ai connects to it using the standard `OpenAIModel` pointed at the Ollama base URL:
+
+```python
+OpenAIModel(
+    "llama3.2",
+    provider=OpenAIProvider(
+        base_url=f"{settings.OLLAMA_HOST}/v1",
+        api_key="ollama",  # required placeholder — Ollama ignores auth
+    ),
+)
+```
+
+This works because Ollama implements the same API contract as OpenAI. The `api_key="ollama"` is a non-empty placeholder — the provider requires a value but Ollama does not enforce authentication.
+
+---
+
+### Q: How do you test a PydanticAI agent without a real API key or network calls?
+
+Use `TestModel` from `pydantic_ai.models.test`. It never makes HTTP calls — it generates a structured output directly from the `output_type` schema:
+
+```python
+from pydantic_ai.models.test import TestModel
+
+with agent.override(model=TestModel(call_tools=[], custom_output_args={...})):
+    result = await agent.run("Analyse AAPL", deps=deps)
+    assert isinstance(result.output, StockReport)
+```
+
+Key parameters:
+- `call_tools=[]` — skip tool invocations entirely; go straight to producing output
+- `call_tools='all'` — invoke all registered tools (default) — requires real data sources to be available
+- `custom_output_args` — provide a valid dict matching the `output_type` schema; needed when fields like `datetime` fail TestModel's default single-character dummy values
+
+For **direct tool testing**, bypass the agent entirely — call the tool function with a `MagicMock` ctx:
+```python
+from unittest.mock import MagicMock
+
+ctx = MagicMock()
+ctx.deps = AgentDependencies(strategy=ScoringStrategy())
+result = await get_technical_data(ctx, "AAPL")  # real yfinance call, no agent overhead
+```
+
+---
+
 ### Q: What should the frontend display when `pe_ratio` is None?
 `pe_ratio` returns `None` from yfinance when the company has no earnings (i.e. not yet profitable — e.g. early-stage biotech, high-growth pre-profit tech). This has a specific financial meaning and must be communicated clearly to the user.
 
