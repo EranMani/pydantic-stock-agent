@@ -695,6 +695,57 @@ This is one of five boolean checks that `check_trend_template` (Step 23) will ag
 
 ---
 
+### Q: What are the five Minervini Trend Template conditions and why does every one need to pass?
+
+`check_trend_template` aggregates five boolean checks into a single `True/False` verdict. All five must be `True` — one failure disqualifies the stock immediately:
+
+| Condition | Check | Why |
+|---|---|---|
+| 1. Price above MAs | `close > SMA_150 and close > SMA_200` | Stock is above medium and long-term institutional accumulation levels |
+| 2. 200-day MA trending up | `SMA_200[-1] > SMA_200[-20]` | Long-term trend is genuinely rising, not just temporarily elevated |
+| 3. 50-day above 150 and 200 | `SMA_50 > SMA_150 and SMA_50 > SMA_200` | Short-term trend is leading — MAs in correct bullish order |
+| 4. Close > 75% of 52w high | `close > high_52w * 0.75` | Stock hasn't collapsed from its highs — still in the same trend |
+| 5. Close > 130% of 52w low | `close > low_52w * 1.30` | Stock has already made a meaningful move — not still in base-building phase |
+
+**Why all five must pass:**
+Each condition filters a different failure mode. A stock can pass four conditions and still be broken — for example, it could be above all its MAs but have collapsed 40% from its 52-week high (condition 4 fails). The Trend Template is designed to be a strict pre-filter, not a scoring system. It produces a binary yes/no, not a grade.
+
+---
+
+### Q: What is the VCP (Volatility Contraction Pattern) and how does `detect_vcp` measure it?
+
+A VCP is a consolidation pattern where a stock's price swings get progressively tighter over time — like a spring being compressed before a breakout. It signals that selling pressure is drying up and the stock is coiling for the next move.
+
+**How `detect_vcp` works:**
+
+It takes the last 60 trading days, splits them into equal windows (default 3 windows of 20 days each), and measures the price range (max Close − min Close) in each window:
+
+```
+Window 1 (days 1–20):   range = max - min  (e.g. $10)
+Window 2 (days 21–40):  range = max - min  (e.g. $5)
+Window 3 (days 41–60):  range = max - min  (e.g. $2)
+
+Each window must be strictly narrower: $10 > $5 > $2 → True
+```
+
+If any window is wider than the previous one, the contraction is broken → `False`.
+
+**Why VCP and Trend Template serve different purposes:**
+- `check_trend_template` answers: *"is this stock in a healthy long-term uptrend?"* — a broad filter, hundreds of stocks can pass at once
+- `detect_vcp` answers: *"is this stock coiling right now, ready to break out?"* — a timing filter, identifies which stocks on the watchlist are actionable today
+
+Trend Template gives you the watchlist. VCP tells you which ones to act on.
+
+**Live examples (as of March 2026):**
+
+| Ticker | Trend Template | VCP | Interpretation |
+|---|---|---|---|
+| ONDS | True | True | Strong setup — uptrend + coiling |
+| RKLB | False | True | VCP forming but hasn't reclaimed all MAs yet |
+| EOSE | False | False | No trend, no base |
+
+---
+
 ### Q: What should the frontend display when `pe_ratio` is None?
 `pe_ratio` returns `None` from yfinance when the company has no earnings (i.e. not yet profitable — e.g. early-stage biotech, high-growth pre-profit tech). This has a specific financial meaning and must be communicated clearly to the user.
 

@@ -10,6 +10,8 @@ appended by add_moving_averages() before any function here is called.
 
 import pandas as pd
 
+from stock_agent.pipelines.technical.indicators.moving_averages import calculate_52_week_levels
+
 
 def ma50_above_ma150_and_ma200(df: pd.DataFrame) -> bool:
     """Return True if SMA_50 is strictly above both SMA_150 and SMA_200 at the latest row.
@@ -51,3 +53,43 @@ def price_above_mas(df: pd.DataFrame) -> bool:
     close = df["Close"].iloc[-1]
     # Both conditions must hold — one MA above is not sufficient
     return bool(close > df["SMA_150"].iloc[-1] and close > df["SMA_200"].iloc[-1])
+
+
+def check_trend_template(df: pd.DataFrame) -> bool:
+    """Return True only if all five Minervini Trend Template conditions are met.
+
+    All conditions must pass — a single failure disqualifies the stock.
+    Requires SMA columns to have been appended by add_moving_averages() first.
+    """
+    close = df["Close"].iloc[-1]
+    high_52w, low_52w = calculate_52_week_levels(df)
+
+    conditions = [
+        price_above_mas(df),                    # close > SMA_150 and SMA_200
+        ma200_trending_up(df),                  # SMA_200 rising over last 20 days
+        ma50_above_ma150_and_ma200(df),         # SMA_50 > SMA_150 and SMA_200
+        close > high_52w * 0.75,                # not more than 25% below 52w high
+        close > low_52w * 1.30,                 # at least 30% above 52w low
+    ]
+    # All five conditions must be True — any False disqualifies the stock
+    return all(conditions)
+
+
+def detect_vcp(df: pd.DataFrame, contractions: int = 3) -> bool:
+    """Return True if the last 60 bars show successive price range contractions.
+
+    Splits the last 60 bars into equal windows and checks that each window's
+    price range (max Close - min Close) is strictly narrower than the previous.
+    A shrinking range signals that selling pressure is drying up — the stock is
+    coiling before a potential breakout.
+    """
+    last_60 = df["Close"].iloc[-60:]
+    window_size = 60 // contractions
+
+    ranges: list[float] = []
+    for i in range(contractions):
+        window = last_60.iloc[i * window_size: (i + 1) * window_size]
+        ranges.append(float(window.max() - window.min()))
+
+    # Each successive range must be strictly narrower than the one before it
+    return all(ranges[i] > ranges[i + 1] for i in range(len(ranges) - 1))

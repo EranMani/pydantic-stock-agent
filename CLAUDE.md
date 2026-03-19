@@ -43,7 +43,7 @@ docker-compose up --build                                                # app +
 - `NEVER merge Phase N+1 work into a Phase N commit` — one logical unit per commit, exactly as defined in the protocol
 - `ALWAYS add a module-level docstring to every .py file` and a one-line docstring to every public function and `async def`; add inline comments on non-obvious logic (asyncio bridges, financial conditions, dynamic routing, Celery/async boundaries)
 - `ALWAYS add Field(description=...)` to every field in every Pydantic model — descriptions are serialized into the agent's schema context and directly improve LLM reasoning quality over the data
-- `ALWAYS update the relevant markdown file immediately` when introducing new architecture decisions, glossary terms, library function explanations, or design rationale discussions — update QA.md, GLOSSARY.md, or ARCHITECTURE.md as appropriate without asking; inform the user that the file was updated
+- `ALWAYS update the relevant markdown file PROACTIVELY and WITHOUT being asked` — any new concept explained, design decision made, library function discussed, or architecture pattern introduced MUST be written to QA.md, GLOSSARY.md, or ARCHITECTURE.md immediately as part of the same response; do NOT wait for the user to request it; simply inform the user which file was updated
 - `ALWAYS explain what will be built before starting a new protocol step` — describe the function(s), logic, and file changes, then explicitly request permission to proceed; NEVER write code for a new step without the user's go-ahead
 
 ---
