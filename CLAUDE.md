@@ -48,6 +48,7 @@ docker-compose up --build                                                # app +
 - `ALWAYS explain what will be built before starting a new protocol step` — describe the function(s), logic, and file changes, then explicitly request permission to proceed; NEVER write code for a new step without the user's go-ahead
 - `ALWAYS mention Eran by name` in commit messages, TASKS.md entries, and QA.md notes whenever a decision, suggestion, correction, or improvement originated from him — this project is a genuine collaboration between Eran (the engineer) and Claude (the AI assistant); commit messages should read naturally as team output (e.g. "Eran identified that...", "suggested by Eran during testing", "Eran required this for..."); this makes the human engineering judgment visible in the git history and project docs
 - `ALWAYS log out-of-protocol tasks to TASKS.md` — any feature, fix, or improvement that Eran raises outside the 62-step commit protocol must be added to TASKS.md immediately with a TASK-### ID, the originating context (e.g. "raised by Eran during Step 28 testing"), and clear acceptance criteria; NEVER silently implement an out-of-protocol change without logging it first
+- `ALWAYS present at least two approaches with tradeoffs` before implementing any non-trivial feature, refactor, or out-of-protocol change — describe each option's pros, cons, and implications, then wait for Eran's explicit approval before writing any code; skip this for mechanical protocol steps where the implementation is fully specified in the commit protocol
 
 ---
 
