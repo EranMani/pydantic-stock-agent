@@ -887,3 +887,43 @@ Display rules for `report_card.py` (Step 34):
 - `market_cap = None` → `"N/A — data unavailable"`
 
 `pe_ratio` gets a specific explanation because `None` has a clear financial meaning. The others are more likely just missing data from yfinance and should show a generic unavailable message.
+
+---
+
+## Phase 5 — CLI & Entry Point
+
+### Q: Why is `main.py` inside `src/stock_agent/` instead of the project root?
+
+Four reasons:
+
+1. **`-m` flag requires a package module** — `uv run python -m stock_agent.main` only works if `main.py` is inside the `stock_agent` package. A root-level `main.py` can't be addressed with `-m` this way.
+
+2. **`src/` layout convention** — this project follows the standard `src/` layout (used by `hatchling`/`uv`). All application code lives under `src/`; the root is reserved for project config files (`pyproject.toml`, `docker-compose.yml`, `.env`, etc.).
+
+3. **Import consistency** — `main.py` imports from `stock_agent.agent`, `stock_agent.models`, etc. Living inside the package means those imports resolve cleanly without any `sys.path` hacks.
+
+4. **Installable entry point** — placing it in the package allows `pyproject.toml` to expose it as a proper CLI entry point:
+   ```toml
+   [project.scripts]
+   stock-agent = "stock_agent.main:main"
+   ```
+   This is how tools like `uvicorn`, `celery`, and `pytest` work — they're all package entry points, not root scripts.
+
+A root-level `main.py` is a quick-script pattern suitable for small one-file projects. For a structured package with workers, a UI, and a DB layer, it belongs inside the package.
+
+---
+
+### Q: Is there a size limit on CLAUDE.md? When should it be split?
+
+There is no hard enforced limit on `CLAUDE.md`. The 200-line limit Eran flagged applies specifically to `MEMORY.md` (the memory index file loaded into every conversation). `CLAUDE.md` is loaded as project instructions and has no equivalent truncation threshold.
+
+That said, the practical guideline is **~250 lines** — beyond that, the file becomes harder to scan and maintain. Current size: ~175 lines.
+
+**If it grows past ~250 lines**, split verbose sections into separate files under `.claude/` and reference them with `@` imports:
+```
+@.claude/rules.md
+@.claude/architecture.md
+```
+The commit protocol already uses this pattern (`@.claude/commit-protocol.md`).
+
+*Raised by Eran during Step 28 — noted as a maintenance concern to keep an eye on as new rules are added.*
