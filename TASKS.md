@@ -29,6 +29,18 @@ decisions, code review, and iterative improvement made in collaboration with Cla
   - UI (Step 34+) can render headlines and risk flags in the report card
   **Suggested timing:** After Step 30 (peer analysis) — all pipeline tools will be wired by then.
 
+### MCP Server
+
+- [ ] **TASK-002** — Add `score_ticker` tool to the MCP server that mimics the CLI input/output without invoking the cloud LLM
+  **Raised by:** Eran after Step 28 CLI testing
+  **Context:** Eran wanted a way to trigger the full scoring pipeline (fundamentals + technicals + weighted score + recommendation) directly from Claude mid-conversation, without the cost and latency of a cloud LLM call. Since the MCP server is a devops/inspection tool, deterministic output is sufficient — the `summary` narrative is not needed here.
+  **Approach chosen:** Option B (lightweight) — reuse the deterministic scorers from `inspect_ticker`, add `fundamental_weight` and `technical_weight` as optional params, compute `weighted_score` and `recommendation` locally.
+  **Acceptance criteria:**
+  - New `score_ticker(ticker, fundamental_weight, technical_weight)` tool added to `stock_mcp_server.py`
+  - Returns fundamentals, technicals, weighted score, and recommendation label — no LLM call
+  - `MCP_SERVER.md` updated with the new tool and a changelog entry
+  **Suggested timing:** Implement before Step 29.
+
 ---
 
 ## Completed
