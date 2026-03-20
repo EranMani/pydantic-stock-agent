@@ -8,6 +8,9 @@ An autonomous stock analysis agent that combines deterministic financial data pi
 
 The core design principle: **the LLM reasons over pre-computed data, never computes it**.
 
+## Why I built it
+Built out of personal need — I'm a swing trader, and I wanted a tool that could analyze stocks against specific technical and fundamental conditions and tell me whether a setup is worth entering. What started as a personal trading tool became a production-grade AI engineering project.
+
 ## What It Does
 
 - Fetches OHLCV price data, fundamentals (P/E, market cap, revenue, earnings), and industry peers via `yfinance`
