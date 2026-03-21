@@ -344,6 +344,55 @@ btn.update()                # push the change to the browser
 ```
 Used in pill toggle handlers to swap between `PILL_ACTIVE` and `PILL_INACTIVE` tokens.
 
+### `ui.circular_progress()` — QCircularProgress (NiceGUI / Quasar)
+A ring gauge rendered as a Quasar `QCircularProgress`. Used in `report_card.py` to display fundamental, technical, and composite scores as colour-coded dials rather than flat bars.
+```python
+ui.circular_progress(value=score, min=1, max=10, show_value=True).props(
+    "size=80px font-size=1.1rem track-color=grey-8 color=green-4 thickness=0.15 rounded"
+)
+```
+Key props: `size` — outer diameter; `thickness` — arc width as a fraction of radius (0.15 = thin ring); `track-color` — the unfilled arc colour; `color` — Quasar semantic colour (not a Tailwind class). `show_value=True` renders the number inside the ring.
+
+### `ui.chip(selectable=True)` — QChip toggle (NiceGUI / Quasar)
+A Quasar `QChip` in selectable mode — a self-contained toggle with built-in selected/unselected visual states. Used in `strategy_panel.py` to replace the button+`_classes.clear()` pill hack.
+```python
+chip = ui.chip("P/E Ratio", selectable=True, selected=True, color="indigo")
+chip.on("update:selected", lambda e, m=metric: _on_toggle(m, e.args))
+```
+The `update:selected` event fires with a boolean payload (`e.args`). No manual class swapping needed — Quasar manages the visual state. Eliminates the need for `PILL_ACTIVE` / `PILL_INACTIVE` tokens.
+
+### `ui.table()` with `add_slot()` — QTable (NiceGUI / Quasar)
+A Quasar `QTable` data table. Accepts `columns` (list of dicts with `name`, `label`, `field`, `align`) and `rows` (list of plain dicts). `add_slot()` injects a Vue template string for per-cell custom rendering.
+```python
+table = ui.table(columns=columns, rows=rows, row_key="ticker")
+table.props("flat dense dark hide-bottom")
+table.add_slot("body-cell-rec", """
+    <q-td :props="props">
+        <q-chip :color="props.value === 'BUY' ? 'positive' : 'negative'" text-color="white" dense>
+            {{ props.value }}
+        </q-chip>
+    </q-td>
+""")
+```
+`flat` removes Quasar's default card shadow. `dense` reduces row height. `hide-bottom` suppresses the pagination footer. `body-cell-{name}` slots target a specific column by its `name` field.
+
+### `q-banner` via `ui.element("q-banner")` — QBanner (NiceGUI / Quasar)
+A structured notification strip used for error states. Rendered via `ui.element("q-banner")` since NiceGUI has no dedicated `ui.banner()` wrapper.
+```python
+with ui.element("q-banner").props("rounded").classes("bg-red-900 text-red-200 w-full"):
+    ui.icon("error_outline").classes("text-red-400 mr-2")
+    ui.label().bind_text(state, "error")
+```
+Preferred over a plain `ui.label()` for errors — provides semantic structure, icon affordance, and a visually distinct container that matches Quasar's alert conventions.
+
+### `ui.element("q-skeleton")` — QSkeleton loading placeholder (NiceGUI / Quasar)
+A shimmer placeholder that mimics the shape of real content while data loads. Used in `progress_panel.py` to render a skeleton matching the report card layout, preventing layout shift when the real card arrives.
+```python
+ui.element("q-skeleton").props("type=circle width=80px height=80px")  # circle for score gauge
+ui.element("q-skeleton").props("type=text width=60%")                  # text line
+```
+Key types: `text` (single line), `rect` (block), `circle` (round). Size controlled via `width`/`height` props. The skeleton layout should mirror the real component's geometry — same row structure, same approximate sizes.
+
 ### Tailwind Responsive Prefixes
 Tailwind's mobile-first responsive system. A class prefixed with `sm:`, `md:`, `lg:`, or `xl:` only applies at that breakpoint and above. Used in NiceGUI via `.classes()` — no CSS files needed.
 
