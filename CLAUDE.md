@@ -65,7 +65,8 @@ pydantic-stock-agent/
 │       └── cd.yml                     # Build + push to ECR on main merge
 ├── src/stock_agent/
 │   ├── main.py                        # CLI entry point — argparse + async run()
-│   ├── agent.py                       # PydanticAI Agent definition, tool registration
+│   ├── agent.py                       # PydanticAI Agent definition, tool registration, run_analysis()
+│   ├── api.py                         # FastAPI app, lifespan, AnalyzeRequest, all HTTP route handlers
 │   ├── config.py                      # Central config: API keys, thresholds, constants
 │   ├── models/
 │   │   ├── report.py                  # StockReport, FundamentalData, TechnicalData, PeerReport

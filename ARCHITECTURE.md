@@ -5,6 +5,47 @@ Updated as each phase is built. All diagrams use [Mermaid](https://mermaid.js.or
 
 ---
 
+## FastAPI Server Lifecycle (`lifespan`)
+
+The FastAPI app uses an `@asynccontextmanager` lifespan hook to manage resources that must be initialized before the server accepts any requests and torn down cleanly on shutdown.
+
+```
+server process starts
+        │
+        ▼
+ ┌─ lifespan STARTUP ──────────────────────────────────┐
+ │  • async SQLAlchemy engine created                  │
+ │  • DB connection pool warmed up                     │
+ │  • Tables auto-created if APP_ENV == "development"  │
+ └─────────────────────────────────────────────────────┘
+        │
+        ▼
+ server is reachable — clients can POST /analyze
+        │
+        ▼
+ ┌─ lifespan SHUTDOWN ─────────────────────────────────┐
+ │  • engine.dispose() — all DB connections closed     │
+ │  • Redis connections released                       │
+ └─────────────────────────────────────────────────────┘
+        │
+        ▼
+server process exits
+```
+
+**Why lifespan over `@app.on_event("startup")`:** `on_event` is deprecated in FastAPI 0.93+. The `lifespan` context manager is the current standard — it co-locates startup and shutdown logic, and works correctly with pytest's `AsyncClient` test fixture.
+
+**Defined in:** `src/stock_agent/db/session.py` (Step 40) — imported and passed to `FastAPI(lifespan=lifespan)` in `api.py`.
+
+**Module ownership:** The FastAPI app, lifespan hook, all request models, and every route handler live exclusively in `src/stock_agent/api.py`. No route definitions exist in any other module. This keeps a clean separation:
+
+| Module | Responsibility |
+|---|---|
+| `agent.py` | PydanticAI agent, tool registration, `run_analysis()` |
+| `api.py` | FastAPI app, lifespan, request models, all route handlers |
+| `main.py` | CLI — argparse, `asyncio.run()` |
+
+---
+
 ## Phase 2 — Fundamental Data Pipeline
 
 ### Web Search Flow (`web_search.py`)

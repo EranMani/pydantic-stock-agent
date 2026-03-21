@@ -11,7 +11,7 @@ Model selection at startup:
 
 Public API:
   run_analysis(ticker, strategy) → StockReport
-    The single entry point used by the CLI (Step 28), FastAPI (Step 29),
+    The single entry point used by the CLI (main.py), FastAPI (api.py),
     and peer analysis (Step 30).
 """
 
