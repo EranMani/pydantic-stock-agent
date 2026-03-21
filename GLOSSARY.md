@@ -216,8 +216,30 @@ The dependency injection context passed as the first parameter to every `@agent.
 ### `TestModel`
 A PydanticAI model (`pydantic_ai.models.test.TestModel`) that never makes HTTP calls. Used in tests to verify agent wiring, schema validation, and dependency injection without a real API key. Key options: `call_tools=[]` (skip tool calls), `custom_output_args` (provide a valid output dict).
 
-### Lazy Initialisation
-A pattern where an object is not created until the first time it is needed. In this project, `get_ollama_agent()` uses `@lru_cache(maxsize=1)` to defer Ollama agent construction until first use — so the module imports cleanly even when Ollama is offline.
+### Lazy Initialisation / Lazy Import
+A pattern where an object is not created (or a module is not imported) until the first time it is actually needed — at **call time**, not at **module load time**.
+
+**Form 1 — lazy initialisation via `@lru_cache`:**
+Used when an object is expensive to construct or depends on external resources that may be unavailable at startup. In this project, `get_ollama_agent()` defers Ollama agent construction until first use — the module imports cleanly even when Ollama is offline.
+```python
+@lru_cache(maxsize=1)
+def get_ollama_agent() -> Agent:
+    return Agent(ollama_model)  # only runs on first call, result cached forever
+```
+
+**Form 2 — lazy import inside a function body:**
+Used to break circular imports — when two modules need each other but neither can be fully loaded first. Moving the import inside the function body defers it to call time, by which point both modules are fully loaded.
+```python
+# fundamental_tools.py — loaded by agent.py BEFORE run_analysis is defined
+@agent.tool
+async def get_peer_reports(ctx, ticker):
+    from stock_agent.agent import run_analysis  # safe: agent.py is fully loaded by call time
+    peers = await fetch_industry_peers(ticker)
+    results = await asyncio.gather(*[run_analysis(p, ctx.deps.strategy) for p in peers[:5]])
+    return [PeerReport(...) for r in results]
+```
+
+**Why not just reorder the imports?** In this project, `agent.py` must import `fundamental_tools.py` to trigger `@agent.tool` registration, and `fundamental_tools.py` must import `agent` to access the `agent` object for `@agent.tool`. This is a genuine circular dependency — lazy import is the correct resolution, not a workaround.
 
 ### Heavy Tool vs Lightweight Tool
 A distinction in agentic tool design. **Heavy tools** (e.g. `get_technical_data`) run the full pipeline — expensive, called once. **Lightweight tools** (e.g. `get_moving_average_signal`) return a specific subset of data cheaply — called on demand when the LLM needs to verify a detail without re-running the full pipeline.
