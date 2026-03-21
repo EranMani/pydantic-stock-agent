@@ -247,6 +247,25 @@ A distinction in agentic tool design. **Heavy tools** (e.g. `get_technical_data`
 ### OpenAI-Compatible API
 An API that implements the same endpoint contract as OpenAI's `/v1/chat/completions`. Allows non-OpenAI models (e.g. Ollama, LM Studio) to be used with OpenAI client libraries or pydantic-ai's `OpenAIModel`. Ollama exposes this at `{OLLAMA_HOST}/v1`.
 
+### Closure Variable Capture in Loops
+A common Python gotcha: when a `lambda` or `def` inside a loop references a loop variable, all closures end up capturing the *same* variable — its final value after the loop ends, not the value at the time the closure was created.
+
+```python
+# BUG — all checkboxes call handler with the last value of `key`
+for key, label in items:
+    checkbox.on_value_change(lambda e: toggle(key))  # key is captured by reference
+
+# FIX — factory function creates a new scope per iteration
+for key, label in items:
+    def make_handler(k: str):        # k is a new local variable each call
+        def handler(e) -> None:
+            toggle(k)               # captures k, not key
+        return handler
+    checkbox.on_value_change(make_handler(key))
+```
+
+Used in `strategy_panel.py` for fundamental metric and technical indicator checkboxes — each checkbox must capture its own `key`, not the loop variable.
+
 ### Reactive Binding (NiceGUI)
 A pattern where a UI element's value is linked directly to a Python variable. When the variable changes, the UI updates automatically — and vice versa. NiceGUI implements this via `.bind_value(obj, 'attr')` for two-way binding, or `on_value_change(callback)` for explicit change handlers.
 
