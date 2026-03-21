@@ -77,6 +77,28 @@ uv run python -m stock_agent.ui.app
 | API only | `uvicorn stock_agent.api:app` |
 | CLI only | `uv run python -m stock_agent.main <ticker>` |
 
+**Analyse button — async UI → API call pattern (Step 33):**
+
+The Analyse button calls `POST /analyze` via `httpx.AsyncClient` from within the NiceGUI event loop. This keeps the UI responsive while the synchronous pipeline runs (10-30s). Phase 9 replaces the direct call with a Celery task dispatch + Redis progress polling.
+
+```
+User clicks Analyse
+        │
+        ▼
+async on_analyse() coroutine  ← runs in NiceGUI's asyncio event loop
+        │
+        ├─ sets analysis_state.is_running = True  → spinner appears
+        │
+        ▼
+httpx.AsyncClient.post("http://localhost:{PORT}/analyze")
+        │                ← awaited — event loop stays free
+        ▼
+StockReport JSON response
+        │
+        ├─ sets analysis_state.result = StockReport(...)
+        └─ sets analysis_state.is_running = False  → result card appears
+```
+
 ---
 
 ## Phase 2 — Fundamental Data Pipeline

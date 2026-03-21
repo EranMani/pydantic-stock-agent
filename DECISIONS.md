@@ -122,3 +122,14 @@ This log is evidence of genuine human-AI collaboration — Eran (engineer) and C
 **Decision:** Both. CLAUDE.md retains the rule (tells Claude *what* to do and *why*). A PreToolUse hook fires before every `git commit` and injects a 6-item checklist (ARCHITECTURE.md, DECISIONS.md, GLOSSARY.md, QA.md, MCP_SERVER.md, LEARNING_MATERIAL.md). A PostToolUse hook fires after every commit and instructs Claude to explain the next step automatically.
 **Outcome:** `.claude/hooks/pre_commit_check.py` and `post_commit_next_step.py` added. Configured in `.claude/settings.json`. LEARNING_MATERIAL.md updated with a hooks concept entry.
 
+---
+
+## DEC-011 — UI calls POST /analyze via HTTP rather than importing run_analysis() directly
+**Raised by:** Claude during Step 33 implementation
+**Context:** The NiceGUI Analyse button needs to trigger a stock analysis. Two options: call `run_analysis()` directly from the UI code, or call `POST /analyze` via `httpx`.
+**Options considered:**
+- Import and call `run_analysis()` directly — simpler, no HTTP overhead, but tightly couples UI to the agent module
+- Call `POST /analyze` via `httpx.AsyncClient` — one extra network hop locally, but the correct architecture for Phase 9
+**Decision:** Call `POST /analyze` via HTTP. When Phase 9 introduces Celery, the endpoint will return a `job_id` instead of a `StockReport` — the UI handler only needs to change what it does with the response, not how it triggers the analysis. Coupling the UI to the HTTP contract now makes Phase 9 a drop-in change.
+**Outcome:** `on_analyse()` in `app.py` uses `httpx.AsyncClient` to call the local API. Runs as an async coroutine so the NiceGUI event loop stays responsive during the 10-30s analysis.
+
