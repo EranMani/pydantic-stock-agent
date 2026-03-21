@@ -110,3 +110,15 @@ This log is evidence of genuine human-AI collaboration — Eran (engineer) and C
 **Decision:** Mount onto FastAPI. One server handles both REST API requests and browser UI requests. The `lifespan` hook initialises shared resources (DB pool, Redis) once for both. Deployment is simpler — one Docker container, one port to expose.
 **Outcome:** `ui/app.py` calls `ui.run_with(app, port=settings.PORT)`. REST API remains accessible at `POST /analyze`; UI served at `GET /`. Both share the same FastAPI instance from `api.py`.
 
+---
+
+## DEC-010 — Enforce markdown update rules via Claude Code hooks rather than CLAUDE.md alone
+**Raised by:** Eran after noticing the ARCHITECTURE.md update was missed following Step 31
+**Context:** CLAUDE.md already contained a rule requiring proactive markdown updates. Despite this, the rule was missed after Step 31. A rule that requires judgment can be overlooked; a hook that fires at commit time cannot.
+**Options considered:**
+- Strengthen the CLAUDE.md rule with a more explicit checklist — passive, still relies on Claude not missing it
+- Add a PreToolUse hook on `git commit` — active, fires at exactly the right moment, injects a checklist Claude must address
+- Both together — belt and braces
+**Decision:** Both. CLAUDE.md retains the rule (tells Claude *what* to do and *why*). A PreToolUse hook fires before every `git commit` and injects a 6-item checklist (ARCHITECTURE.md, DECISIONS.md, GLOSSARY.md, QA.md, MCP_SERVER.md, LEARNING_MATERIAL.md). A PostToolUse hook fires after every commit and instructs Claude to explain the next step automatically.
+**Outcome:** `.claude/hooks/pre_commit_check.py` and `post_commit_next_step.py` added. Configured in `.claude/settings.json`. LEARNING_MATERIAL.md updated with a hooks concept entry.
+
