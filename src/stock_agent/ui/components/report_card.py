@@ -10,6 +10,7 @@ Public API:
 from nicegui import ui
 
 from stock_agent.models.report import StockReport
+from stock_agent.ui.components.peer_table import peer_table
 
 # Recommendation badge: background + text colour classes
 _BADGE: dict[str, str] = {
@@ -89,22 +90,7 @@ def report_card(report: StockReport) -> None:
         ui.label("Analyst Summary").classes("text-sm font-semibold text-gray-500 uppercase tracking-wide")
         ui.label(report.summary).classes("text-sm text-gray-700 leading-relaxed")
 
-        # --- Peer comparison table (only if peers exist) ---
-        if report.peers:
-            ui.separator()
-            ui.label("Peer Comparison").classes("text-sm font-semibold text-gray-500 uppercase tracking-wide")
-
-            columns = [
-                {"name": "ticker", "label": "Ticker", "field": "ticker", "align": "left"},
-                {"name": "score",  "label": "Score",  "field": "score",  "align": "center"},
-                {"name": "rec",    "label": "Rating", "field": "rec",    "align": "center"},
-            ]
-            rows = [
-                {
-                    "ticker": p.ticker,
-                    "score":  f"{p.weighted_score:.1f}",
-                    "rec":    p.recommendation,
-                }
-                for p in report.peers
-            ]
-            ui.table(columns=columns, rows=rows).classes("w-full text-sm")
+        # --- Peer comparison table ---
+        ui.separator()
+        ui.label("Peer Comparison").classes("text-sm font-semibold text-gray-500 uppercase tracking-wide")
+        peer_table(report.peers)
