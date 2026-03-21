@@ -163,6 +163,41 @@ Risk Flags: none detected
 
 ---
 
+### `score_ticker`
+
+**Purpose:** Runs the full deterministic scoring pipeline on a ticker and returns the weighted score and recommendation — without invoking the cloud LLM. Mirrors the CLI (`uv run python -m stock_agent.main <ticker>`) but free of API costs and latency. Proposed by Eran to verify the ground logic works mid-conversation.
+
+**Inputs:**
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `ticker` | `str` | — | Stock ticker symbol (e.g. `"ONDS"`) |
+| `fundamental_weight` | `float` | `0.5` | Weight applied to the fundamental score (must sum to 1.0 with `technical_weight`) |
+| `technical_weight` | `float` | `0.5` | Weight applied to the technical score |
+
+**Output:** Formatted scoring report:
+```
+ONDS — Ondas Holdings Inc.
+==========================
+
+FUNDAMENTAL SCORE:  5.50 / 10  (weight: 0.3)
+  P/E Ratio:        N/A
+  Beta:             2.58
+  Revenue Growth:   +5.8%
+
+TECHNICAL SCORE:    10.00 / 10  (weight: 0.7)
+  Trend Template:   PASS
+  VCP Detected:     True
+
+WEIGHTED SCORE:     8.65 / 10
+RECOMMENDATION:     BUY
+```
+
+**Error handling:** Returns a descriptive error string if `fundamental_weight + technical_weight != 1.0` — no exception raised to the caller.
+
+**When Claude uses it:** Verifying scoring pipeline output mid-conversation, spot-checking a ticker with custom weights before running a full CLI analysis, confirming recommendation thresholds are applied correctly.
+
+---
+
 ## Windows Compatibility Notes
 
 FastMCP uses `anyio` under the hood to run its event loop and flush tool responses to stdout via a **zero-capacity memory stream rendezvous** — both sides (writer and reader) must be ready at the same moment for the flush to complete. On Linux/macOS this is forgiving; on Windows it is not, because Windows uses **IOCP (I/O Completion Ports)** for async I/O, which is less tolerant of event-loop stalls. Two categories of mistakes will silently hang every tool call on Windows:
@@ -228,6 +263,21 @@ result = await asyncio.to_thread(
 ---
 
 ## Changelog
+
+### v0.3.0 — 2026-03-20
+
+**New tool — `score_ticker`: deterministic weighted scoring without LLM (TASK-002)**
+
+#### Added
+- `score_ticker(ticker, fundamental_weight, technical_weight)` — runs the full fundamental + technical scoring pipeline and returns `weighted_score` and `recommendation` with no cloud LLM call. Proposed by Eran as a lightweight alternative to the CLI for mid-conversation pipeline verification.
+
+#### Implementation details
+- Reuses `ScoringStrategy` for weight validation — same error path as the CLI.
+- Concurrent phase-1 fetch (`fetch_company_name`, `fetch_valuation_metrics`, `fetch_earnings_growth`, `fetch_ohlcv`) via `asyncio.gather` — identical pattern to `inspect_ticker`.
+- Recommendation thresholds match the agent's system prompt exactly: ≥7.0 → BUY, ≥4.0 → WATCH, <4.0 → AVOID.
+- No new module-level imports required — all dependencies already loaded by `inspect_ticker`.
+
+---
 
 ### v0.2.0 — 2026-03-20
 

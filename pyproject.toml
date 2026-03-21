@@ -5,6 +5,7 @@ description = "Autonomous PydanticAI Stock Analyst Agent"
 requires-python = ">=3.12,<3.14"
 dependencies = [
     "ddgs>=9.11.4",
+    "duckduckgo-search>=8.1.1",
     "fastapi>=0.135.1",
     "httpx[asyncio]>=0.28.1",
     "logfire>=4.29.0",

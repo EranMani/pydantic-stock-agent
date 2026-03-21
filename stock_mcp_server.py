@@ -356,6 +356,88 @@ async def inspect_ticker(ticker: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Tool 6 — score_ticker
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+async def score_ticker(
+    ticker: str,
+    fundamental_weight: float = 0.5,
+    technical_weight: float = 0.5,
+) -> str:
+    """Run the full scoring pipeline on a ticker and return weighted score + recommendation.
+
+    Mirrors the CLI (uv run python -m stock_agent.main <ticker>) but without
+    invoking the cloud LLM — no summary narrative, no API cost. Useful for
+    verifying that the deterministic scoring pipeline produces correct results
+    mid-conversation.
+
+    Raises a descriptive error if weights do not sum to 1.0.
+    """
+    # Validate weights via ScoringStrategy — same validation as the CLI and agent
+    try:
+        strategy = ScoringStrategy(
+            fundamental_weight=fundamental_weight,
+            technical_weight=technical_weight,
+        )
+    except ValueError as exc:
+        return f"Invalid weights: {exc}"
+
+    # Concurrent fetch — same pattern as inspect_ticker
+    company_name, valuation, growth, df = await asyncio.gather(
+        fetch_company_name(ticker),
+        fetch_valuation_metrics(ticker),
+        fetch_earnings_growth(ticker),
+        fetch_ohlcv(ticker),
+    )
+
+    # Fundamental score
+    temp = FundamentalData(
+        pe_ratio=valuation["pe_ratio"],
+        beta=valuation["beta"],
+        market_cap=valuation["market_cap"],
+        revenue_growth=growth["revenue_growth"],
+        score=0.0,
+    )
+    f_score = calculate_fundamental_score(temp, strategy)
+
+    # Technical score
+    tech_data = calculate_technical_score(df, strategy)
+
+    # Weighted score — mirrors the formula in agent.py SYSTEM_PROMPT
+    weighted_score = (f_score * strategy.fundamental_weight) + (tech_data.score * strategy.technical_weight)
+
+    # Recommendation thresholds — identical to the agent's system prompt rules
+    if weighted_score >= 7.0:
+        recommendation = "BUY"
+    elif weighted_score >= 4.0:
+        recommendation = "WATCH"
+    else:
+        recommendation = "AVOID"
+
+    # Format key signals for quick readability
+    pe_str = f"{temp.pe_ratio:.2f}" if temp.pe_ratio is not None else "N/A"
+    beta_str = f"{temp.beta:.2f}" if temp.beta is not None else "N/A"
+    rev_str = f"{temp.revenue_growth:.1%}" if temp.revenue_growth is not None else "N/A"
+    trend_str = "PASS" if tech_data.trend_template_passed else "FAIL"
+
+    sep = "=" * (len(ticker) + len(company_name) + 4)
+    return (
+        f"{ticker} — {company_name}\n"
+        f"{sep}\n\n"
+        f"FUNDAMENTAL SCORE:  {f_score:.2f} / 10  (weight: {strategy.fundamental_weight})\n"
+        f"  P/E Ratio:        {pe_str}\n"
+        f"  Beta:             {beta_str}\n"
+        f"  Revenue Growth:   {rev_str}\n\n"
+        f"TECHNICAL SCORE:    {tech_data.score:.2f} / 10  (weight: {strategy.technical_weight})\n"
+        f"  Trend Template:   {trend_str}\n"
+        f"  VCP Detected:     {tech_data.vcp_detected}\n\n"
+        f"WEIGHTED SCORE:     {weighted_score:.2f} / 10\n"
+        f"RECOMMENDATION:     {recommendation}\n"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 

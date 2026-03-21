@@ -31,7 +31,7 @@ decisions, code review, and iterative improvement made in collaboration with Cla
 
 ### MCP Server
 
-- [ ] **TASK-002** — Add `score_ticker` tool to the MCP server that mimics the CLI input/output without invoking the cloud LLM
+- [x] **TASK-002** — Add `score_ticker` tool to the MCP server that mimics the CLI input/output without invoking the cloud LLM
   **Raised by:** Eran after Step 28 CLI testing
   **Context:** Eran wanted a way to trigger the full scoring pipeline (fundamentals + technicals + weighted score + recommendation) directly from Claude mid-conversation, without the cost and latency of a cloud LLM call. Since the MCP server is a devops/inspection tool, deterministic output is sufficient — the `summary` narrative is not needed here.
   **Approach chosen:** Option B (lightweight) — reuse the deterministic scorers from `inspect_ticker`, add `fundamental_weight` and `technical_weight` as optional params, compute `weighted_score` and `recommendation` locally.
@@ -45,4 +45,4 @@ decisions, code review, and iterative improvement made in collaboration with Cla
 
 ## Completed
 
-*(Tasks move here once merged into the codebase)*
+- [x] **TASK-002** — `score_ticker` MCP tool implemented in `stock_mcp_server.py`. `MCP_SERVER.md` updated with tool reference and v0.3.0 changelog entry.
