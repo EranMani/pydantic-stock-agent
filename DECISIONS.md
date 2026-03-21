@@ -175,3 +175,11 @@ This log is evidence of genuine human-AI collaboration — Eran (engineer) and C
 **Decision:** Always set `color=None` on any `ui.button()` where Tailwind classes control the visual appearance. This removes Quasar's color prop entirely and makes Tailwind the sole authority.
 **Outcome:** Applied to all pill toggle buttons and the Analyse button. Pattern to follow for any future button with custom Tailwind styling.
 
+---
+
+## DEC-016 — Fixed full-bleed toolbar with height contract (Aria)
+**Raised by:** Eran — page felt unmodern, title was floating with no visual anchor
+**Context:** The "Stock Agent" title and subtitle were bare labels inside the content column — no background, no frame, no hierarchy. The page had no architectural top edge.
+**Decision:** Full-bleed fixed toolbar, `gray-900` background, `h-14` (56px), with a 1px `indigo-600` bottom border accent. Brand name left, live status dot right. Inner content constrained to `max-w-2xl` to align with the body column. Body content column carries `pt-14` offset to clear the fixed header. Height contract: `h-14` and `pt-14` are coupled — both must change together if the header height ever changes.
+**Outcome:** `app_header()` function added to `app.py`. `HEADER` token dict added to `theme.py` centralizing all header constants. Header background deliberately `gray-900` (not indigo) to avoid competing with the `indigo-600` primary action color.
+

@@ -313,6 +313,18 @@ with ui.expansion("Scoring Strategy", icon="tune"):
 ```
 Collapsed by default (no `value=True` needed). Equivalent to an HTML `<details>` element but styled with Quasar/Tailwind.
 
+### `HEADER` token (theme.py)
+A Python dict in `theme.py` holding all visual constants for the application toolbar. Centralizes the height contract (`h-14` bar height ↔ `pt-14` body offset), background, border accent, brand typography, and status indicator classes in one place. The coupling between bar height and body offset is documented here so any future height change doesn't silently break the layout.
+```python
+HEADER: dict[str, str] = {
+    "bar":         "fixed top-0 left-0 right-0 z-50 h-14 bg-gray-900 border-b border-indigo-600",
+    "inner":       "h-full max-w-2xl mx-auto px-4 flex items-center justify-between",
+    "brand":       "text-lg font-bold tracking-tight text-white",
+    "body_offset": "pt-14",   # must match bar height — change both together
+    ...
+}
+```
+
 ### `color=None` on `ui.button()`
 NiceGUI buttons default to `color='primary'`, which activates Quasar's scoped color CSS. This overrides Tailwind `bg-*` classes at higher specificity — making `.classes("bg-indigo-600")` invisible. Setting `color=None` removes Quasar's color prop entirely, making Tailwind the sole visual authority. Required any time a button uses custom Tailwind color classes.
 ```python
