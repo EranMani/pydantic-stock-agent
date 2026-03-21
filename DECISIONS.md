@@ -108,7 +108,7 @@ This log is evidence of genuine human-AI collaboration — Eran (engineer) and C
 - Standalone NiceGUI server — simple to start, but splits API and UI across two ports; requires CORS configuration and a reverse proxy in production
 - Mount NiceGUI onto FastAPI via `ui.run_with(app)` — single process, single port, shared lifespan
 **Decision:** Mount onto FastAPI. One server handles both REST API requests and browser UI requests. The `lifespan` hook initialises shared resources (DB pool, Redis) once for both. Deployment is simpler — one Docker container, one port to expose.
-**Outcome:** `ui/app.py` calls `ui.run_with(app, port=settings.PORT)`. REST API remains accessible at `POST /analyze`; UI served at `GET /`. Both share the same FastAPI instance from `api.py`.
+**Outcome:** `ui/app.py` calls `ui.run_with(app)` then `uvicorn.run(app, port=settings.PORT)`. `ui.run_with()` mounts NiceGUI as middleware on the FastAPI app — it does not accept a `port` argument. Port is owned by uvicorn, not NiceGUI. Discovered during Step 32 testing.
 
 ---
 

@@ -63,10 +63,7 @@ def create_ui() -> None:
 
 
 if __name__ == "__main__":
+    import uvicorn
     create_ui()
-    ui.run_with(
-        app,
-        port=settings.PORT,
-        title="Stock Agent",
-        reload=False,
-    )
+    ui.run_with(app)
+    uvicorn.run(app, host="0.0.0.0", port=settings.PORT)
