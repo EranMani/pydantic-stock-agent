@@ -43,6 +43,39 @@ server process exits
 | `agent.py` | PydanticAI agent, tool registration, `run_analysis()` |
 | `api.py` | FastAPI app, lifespan, request models, all route handlers |
 | `main.py` | CLI — argparse, `asyncio.run()` |
+| `ui/app.py` | NiceGUI entry point — mounts UI onto FastAPI, registers pages |
+
+---
+
+## NiceGUI + FastAPI — Shared Server Architecture
+
+NiceGUI is mounted onto the existing FastAPI app via `ui.run_with(app)`. Both the REST API and the web UI run on the same port in the same process — no second server, no proxy required.
+
+```
+uv run python -m stock_agent.ui.app
+        │
+        ▼
+ ui/app.py — calls create_ui(), then ui.run_with(app, port=PORT)
+        │
+        ├─ FastAPI app (from api.py)
+        │     └─ POST /analyze          ← REST API clients
+        │
+        └─ NiceGUI pages (registered in create_ui())
+              └─ GET /                  ← Browser clients
+```
+
+**Why co-locate instead of a separate server:**
+- One process, one port — simpler deployment and Docker configuration
+- NiceGUI and the REST API share the same `lifespan` hook — DB and Redis are initialised once for both
+- NiceGUI communicates with the backend via the same FastAPI routes — no cross-origin issues
+
+**Entry points by use case:**
+
+| Use case | Command |
+|---|---|
+| Web UI + API | `uv run python -m stock_agent.ui.app` |
+| API only | `uvicorn stock_agent.api:app` |
+| CLI only | `uv run python -m stock_agent.main <ticker>` |
 
 ---
 

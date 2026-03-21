@@ -98,3 +98,15 @@ This log is evidence of genuine human-AI collaboration — Eran (engineer) and C
 - Defer and return empty list — unblocks Phase 5, strategy discussion deferred
 **Decision:** Defer. The Step 30 logic is sound and handles `[]` gracefully. Blocking Phase 5 over a data provider gap is not warranted — logged as TASK-003 for a focused strategy discussion after Phase 5 completes.
 **Outcome:** Phase 5 completed on schedule. TASK-003 in backlog with all options documented.
+
+---
+
+## DEC-009 — Mount NiceGUI onto FastAPI instead of running a separate server
+**Raised by:** Eran during Step 31 review
+**Context:** NiceGUI has its own built-in server (`ui.run()`). Running it standalone would mean two separate processes on two separate ports — one for the REST API, one for the UI.
+**Options considered:**
+- Standalone NiceGUI server — simple to start, but splits API and UI across two ports; requires CORS configuration and a reverse proxy in production
+- Mount NiceGUI onto FastAPI via `ui.run_with(app)` — single process, single port, shared lifespan
+**Decision:** Mount onto FastAPI. One server handles both REST API requests and browser UI requests. The `lifespan` hook initialises shared resources (DB pool, Redis) once for both. Deployment is simpler — one Docker container, one port to expose.
+**Outcome:** `ui/app.py` calls `ui.run_with(app, port=settings.PORT)`. REST API remains accessible at `POST /analyze`; UI served at `GET /`. Both share the same FastAPI instance from `api.py`.
+
