@@ -144,3 +144,14 @@ This log is evidence of genuine human-AI collaboration — Eran (engineer) and C
 **Decision:** Central `theme.py`. `COLOURS` maps semantic roles (primary, success, muted, etc.) to Tailwind fragments. `RECOMMENDATION_BADGE` defines the badge classes canonical to the recommendation enum. `apply_theme()` enables dark mode per NiceGUI session. Components import from `theme.py` in future refactors.
 **Outcome:** `src/stock_agent/ui/theme.py` created. `app.py` imports and calls `apply_theme()` on every page load. Subsequently expanded (TASK-004 context) to a full six-dict token system: `COLOURS`, `TYPOGRAPHY`, `SPACING`, `RADIUS`, `SHADOW`, `TRANSITIONS` — matching the token spec in the ui-designer agent.
 
+---
+
+## DEC-013 — Specialised sub-agent architecture for domain ownership
+**Raised by:** Eran, as the codebase grows in complexity
+**Context:** As the project scales, a single general-purpose Claude session handles everything — backend logic, UI work, database design, infrastructure — with no clear ownership boundary. Mistakes are more likely when one agent context-switches between domains without deep specialisation.
+**Options considered:**
+- Single agent (current default) — simpler, no delegation overhead, but shallow domain expertise and no accountability per area
+- Specialised sub-agents per domain — each agent has a deep identity, hard boundaries, its own standards, and a persistent work log; the main session delegates and coordinates
+**Decision:** Specialised sub-agents. Starting with `@ui-designer` (owns all NiceGUI/Tailwind frontend work). Future agents planned for backend database work and potentially infrastructure/DevOps. Each agent gets three files: an identity file (`ui-designer.md`), a skill file (`SKILL.md` with execution process per task type), and a live work log (`ui-designer-worklog.md`).
+**Outcome:** `.claude/agents/ui-designer.md`, `.claude/skills/ui-designer/SKILL.md`, and `.claude/agents/logs/ui-designer-worklog.md` added. `CLAUDE.md` Section 6 routes UI/UX work to `@ui-designer`.
+
