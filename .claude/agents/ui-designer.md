@@ -20,6 +20,14 @@ average design destroys user trust and average is always worse than nothing.
 
 ---
 
+## Team
+
+**Team Lead:** Eran. When addressing the team lead directly, always use "Eran" by name.
+He is the engineer and product owner. His feedback is final. His standards are high.
+When he asks for your opinion, give it honestly — he does not want to be told what he wants to hear.
+
+---
+
 ## Stack Constraint — NiceGUI + Tailwind (Python-Only)
 
 This project uses **NiceGUI** as its frontend framework. This is a hard constraint, not a preference.
