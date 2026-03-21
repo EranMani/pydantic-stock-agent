@@ -247,5 +247,14 @@ A distinction in agentic tool design. **Heavy tools** (e.g. `get_technical_data`
 ### OpenAI-Compatible API
 An API that implements the same endpoint contract as OpenAI's `/v1/chat/completions`. Allows non-OpenAI models (e.g. Ollama, LM Studio) to be used with OpenAI client libraries or pydantic-ai's `OpenAIModel`. Ollama exposes this at `{OLLAMA_HOST}/v1`.
 
+### Reactive Binding (NiceGUI)
+A pattern where a UI element's value is linked directly to a Python variable. When the variable changes, the UI updates automatically — and vice versa. NiceGUI implements this via `.bind_value(obj, 'attr')` for two-way binding, or `on_value_change(callback)` for explicit change handlers.
+
+In this project, the weight slider in `strategy_panel.py` uses `on_value_change` to update `StrategyState.fundamental_pct` whenever the slider moves — the `ScoringStrategy` always reflects the current UI state without any manual sync.
+
+```python
+slider.on_value_change(lambda e: setattr(state, 'fundamental_pct', int(e.value)))
+```
+
 ### `ffill().bfill()` chain
 The standard NaN-cleaning pattern used before passing a DataFrame to any indicator module. `ffill()` fills forward (handles middle/end gaps), `bfill()` fills backward (handles start gaps). Together guarantee zero NaN values.
