@@ -125,19 +125,22 @@ def create_ui() -> None:
             # Everything the user touches lives in one card. The strategy
             # expansion opens inline — no separate panel floating below.
             # ------------------------------------------------------------------
+            # Quasar prop: flat — removes Quasar's default card shadow so Tailwind's
+            # shadow-sm is the sole elevation authority. Without flat, Quasar and Tailwind
+            # both apply shadows and the result is a muddy double-shadow.
             with ui.card().classes(
                 f"w-full {SPACING['card_padding_lg']} {SPACING['component_gap']} "
                 f"bg-{COLOURS['surface']} rounded-xl shadow-sm"
-            ):
+            ).props("flat"):
 
                 # Row 1 — Ticker input
-                with ui.column().classes(f"w-full {SPACING['tight_gap']}"):
-                    ui.label("Ticker Symbol").classes(
-                        f"{TYPOGRAPHY['section_label']} text-{COLOURS['subtle']}"
-                    )
-                    ticker_input = ui.input(
-                        placeholder="e.g. AAPL, NVDA, ONDS",
-                    ).classes("w-full")
+                # Quasar props: outlined (bordered container — reads clearly on dark surface),
+                # rounded (matches card's rounded-xl personality), label (floating Material
+                # label replaces the separate ui.label() above — cleaner DOM and better UX).
+                # The separate label row is removed; the QInput label prop handles it natively.
+                ticker_input = ui.input(
+                    placeholder="e.g. AAPL, NVDA, ONDS",
+                ).classes("w-full").props('outlined rounded label="Ticker Symbol"')
 
                 # Row 2 — Scoring weight label + live percentage display
                 weight_label = ui.label(
@@ -146,9 +149,14 @@ def create_ui() -> None:
                 ).classes(f"{TYPOGRAPHY['section_label']} text-{COLOURS['subtle']}")
 
                 # Row 3 — Weight slider (full width)
+                # Quasar prop: label — shows the current value in a floating bubble
+                # while dragging. Real-time feedback during interaction without adding
+                # static noise. The persistent text label above still shows the split
+                # at rest; this bubble confirms the value mid-drag.
+                # color=indigo maps to Quasar's built-in indigo palette — matches brand.
                 slider = ui.slider(
                     min=0, max=100, step=1, value=strategy_state.fundamental_pct
-                ).classes("w-full")
+                ).classes("w-full").props("label color=indigo")
 
                 def on_weight_change(e) -> None:
                     """Update state and refresh weight display label on slider change."""
@@ -162,7 +170,10 @@ def create_ui() -> None:
 
                 # Row 4 — Analyse button (full width, visually dominant)
                 # color=None: strips Quasar color prop so Tailwind bg-indigo-600 wins.
-                analyse_btn = ui.button("Analyse", color=None).classes(_ANALYSE_BTN_CLASSES)
+                # Quasar props: unelevated (removes default Material shadow — not needed on a
+                # flat dark card surface), rounded (Quasar's structural border-radius, consistent
+                # with the button's own sizing system rather than a raw Tailwind rounded-lg).
+                analyse_btn = ui.button("Analyse", color=None).classes(_ANALYSE_BTN_CLASSES).props("unelevated rounded")
 
                 async def on_analyse() -> None:
                     """Dispatch POST /analyze and update analysis_state with the result.

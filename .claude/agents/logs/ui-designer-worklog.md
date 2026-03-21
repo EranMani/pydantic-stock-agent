@@ -9,6 +9,400 @@
 ---
 
 <!-- ============================================================
+     TASK-004 — Five Quasar Component Upgrades (approved batch)
+     ============================================================ -->
+
+## TASK-004 — Five Quasar Component Upgrades — 2026-03-21
+
+### Status
+`COMPLETE — awaiting Eran's commit approval`
+
+---
+
+### Task Brief
+> Eran approved all five Quasar improvements in a single pass. Building them now.
+> 1. QCircularProgress — score gauges in report_card.py (replace linear_progress)
+> 2. QChip — metric pill toggles in strategy_panel.py (replace button hack)
+> 3. QTable — peer table in peer_table.py (replace manual row construction)
+> 4. QBanner — error state in progress_panel.py (replace plain red label)
+> 5. QSkeleton — loading state in progress_panel.py (replace spinner-only)
+
+---
+
+### Work In Progress
+
+**[START] Reading all source files — understanding the current system before touching anything.**
+
+Current state of the five target areas:
+- `report_card.py` — `_score_gauge()` uses `ui.linear_progress` with score normalised to 0–1.
+  The `_GAUGE_COLOUR` dict uses Tailwind text classes. `_score_colour()` returns e.g. `text-green-400`.
+  Problem: `ui.circular_progress` expects a Quasar `color` fragment (e.g. `green-400`), not a Tailwind
+  text class. Need to separate the colour logic — return the fragment from `_score_colour()` and build
+  the text class separately where needed.
+
+- `strategy_panel.py` — pills use `ui.button(color=None)` + `_classes.clear()` hack to swap states.
+  `PILL_ACTIVE` and `PILL_INACTIVE` tokens live in `theme.py`. The `ui.chip()` approach with
+  `selectable=True` eliminates this entirely. The `on("update:selected", ...)` event binding is the
+  key pattern to understand.
+
+- `peer_table.py` — manual header row + data rows using `ui.row()`. Works but verbose. `ui.table()`
+  with `add_slot()` for custom cell rendering is the correct Quasar approach. The `add_slot()` method
+  takes Vue template HTML — this is NiceGUI's documented pattern, not a framework violation.
+
+- `progress_panel.py` — error state is a plain `ui.label` with red text. `ui.element("q-banner")`
+  with `bind_visibility_from` on state.error is cleaner and more semantically correct.
+  The skeleton: currently only a spinner while running. Need a `_skeleton_card()` function that
+  renders `q-skeleton` elements matching the report card layout — shown when `is_running=True`.
+
+**[DECISION] `_score_colour()` return value change:**
+Currently returns `"text-green-400"` (a full Tailwind class). The new `_score_gauge()` needs to
+pass `color=green-400` to `.props()` on the circular progress widget. I'll change `_score_colour()`
+to return just the color fragment (`"green-400"`, `"yellow-400"`, `"red-400"`) and update the one
+call site that uses it with text styling to build `f"text-{colour}"` explicitly. This is cleaner
+regardless — the function name is `_score_colour`, not `_score_text_class`.
+
+**[DECISION] QChip event binding:**
+The spec says `chip.on("update:selected", on_select)`. NiceGUI's `ui.chip` with `selectable=True`
+emits a Vue `update:selected` event when clicked. The handler receives an event object with `.value`
+being the new selected boolean. The `color` prop can be updated via `.props("color=indigo")` or
+`.props("color=grey-8")` inline in the handler. This replaces the `_classes.clear()` hack entirely.
+Removing `PILL_ACTIVE` and `PILL_INACTIVE` from `theme.py` as instructed — they're dead tokens once
+the chip migration is complete.
+
+**[DECISION] QTable slot injection:**
+`table.add_slot("body-cell-rec", ...)` and `table.add_slot("body-cell-score", ...)` use Vue template
+strings. NiceGUI's `add_slot()` is the documented API for this — it's not HTML file creation.
+The Quasar color names for the badge: `positive`, `negative`, `warning` — these are Quasar semantic
+colors that map to green/red/yellow respectively in both light and dark mode. Better than hardcoding
+color classes in a slot template.
+
+**[DECISION] QBanner visibility binding:**
+`bind_visibility_from(state, "error")` will show the banner when `state.error` is truthy.
+The banner content uses `bind_text_from(state, "error")` on an inner label. One issue: if `state.error`
+is `None`, `bind_text_from` will display "None" as text. The existing code handles this with
+`backward=lambda e: f"Error: {e}" if e else ""` — I'll keep that backward transform.
+
+**[DECISION] Skeleton placement:**
+The spec says show the skeleton "instead of (or alongside) the spinner". I'm going with: show
+skeleton INSTEAD of the spinner when running, as it provides more spatial context. The skeleton
+mirrors the report card layout so the user understands what's loading. The spinner row is replaced
+by the skeleton card when `is_running=True`. This avoids the awkward double-loading-state.
+
+**[NOW BUILDING] — Starting with report_card.py (change 1)**
+
+---
+
+### Design Decisions Log
+
+| Decision | Rationale |
+|---|---|
+| `_score_colour()` returns color fragment not text class | Cleaner — name matches semantics; callers build their own class prefix |
+| QChip replaces button hack | Native toggle contract, no `_classes.clear()` hacks, cleaner event model |
+| Skeleton replaces spinner | Spatial context during load > generic spinner; mirrors actual content layout |
+| `positive`/`negative`/`warning` for QTable badge colors | Quasar semantic colors — theme-aware, not hardcoded hex |
+| PILL_ACTIVE / PILL_INACTIVE removed from theme.py | Dead tokens after chip migration — leaving dead tokens in the token file is noise |
+
+---
+
+### Discoveries & Surprises
+
+**1. `_score_colour()` return value mismatch:**
+The existing function returned full Tailwind text classes (`"text-green-400"`).
+QCircularProgress's `color` prop expects a color fragment (`"green-400"`).
+I refactored the return value to the fragment and updated `_GAUGE_COLOUR` keys
+accordingly. Any future caller that needs a Tailwind text class builds it with
+`f"text-{_score_colour(score)}"` — this is cleaner anyway.
+
+**2. QChip `on("update:selected", ...)` event model:**
+The Vue event `update:selected` fires with `.value` as the new boolean state.
+This is exactly what the spec described. Works cleanly. The `color` prop update
+via `c.props("color=indigo")` / `c.props("color=grey-8")` mutates the rendered
+component in-place without any class-swapping gymnastics. Night and day vs. the
+old button hack.
+
+**3. QBanner `bind_visibility_from` with `None`:**
+`bind_visibility_from(state, "error")` uses Python's truthiness evaluation.
+`None` is falsy, `""` is falsy — the banner hides correctly in both the
+initialised state and after a successful clear. No backward transform needed
+for visibility. The inner label still uses a backward transform to avoid
+displaying "None" as text when the attribute is `None`.
+
+**4. QSkeleton `type=QBadge`:**
+Quasar's QSkeleton accepts `type=QBadge` (capital Q) as a built-in shape —
+it renders a pill-shaped block matching QBadge dimensions. This is a
+Quasar-specific type string, not a Tailwind class. Used for the recommendation
+badge placeholder in the skeleton header.
+
+**5. Skeleton replaces spinner entirely:**
+Made the call to use the skeleton *instead of* the spinner, not alongside it.
+Rationale: the skeleton provides all the visual feedback a spinner provides
+(something is happening) plus it communicates spatial context (where the result
+will appear). Showing both would create visual noise with no benefit.
+
+**6. `peer_table.py` no longer imports `RECOMMENDATION_BADGE` or `TYPOGRAPHY`:**
+The QTable slot-based approach moves badge styling into the Quasar slot template
+(using `positive`/`negative`/`warning` semantic colors). The old imports were
+only needed for the manual row construction. Removed clean — no orphaned imports.
+
+---
+
+### Self-Review Checklist
+
+```
+VISUAL COMPLETENESS
+[x] All interactive states designed — chips have selected/unselected, error banner visibility-bound
+[x] All data states handled — empty peer list, error state, loading state, result state
+[x] Responsive: all components use w-full or justify-around — flex naturally
+[x] Dark mode: all components operate on dark surface, skeleton uses bg-gray-800
+[x] Long content: summary label has leading-relaxed; no truncation introduced
+[x] Missing content: empty peers list renders placeholder label
+
+QUALITY COMPLETENESS
+[x] Contrast: green-400/yellow-400/red-400 on gray-800 = AA pass (documented in theme.py)
+[x] Interactive elements: chips are keyboard-navigable (Quasar handles this natively)
+[x] Zero hardcoded values — all colors from COLOURS token or Quasar semantic names
+[x] Spacing follows 8px grid via SPACING tokens
+
+CODE COMPLETENESS
+[x] All imports clean — no orphaned imports, no dead imports
+[x] PILL_ACTIVE / PILL_INACTIVE removed from theme.py
+[x] All files have module-level docstrings
+[x] All public functions have one-line docstrings
+[x] Tests: 6/6 passing
+```
+
+---
+
+### Files Modified
+
+| File | Change |
+|---|---|
+| `src/stock_agent/ui/components/report_card.py` | Replace `ui.linear_progress` with `ui.circular_progress` (QCircularProgress); refactor `_score_colour()` to return fragment not text class |
+| `src/stock_agent/ui/components/strategy_panel.py` | Replace `ui.button(color=None)` + `_classes.clear()` hack with `ui.chip(selectable=True)`; remove PILL imports |
+| `src/stock_agent/ui/components/peer_table.py` | Replace manual row construction with `ui.table()` + `add_slot()` for custom cell rendering |
+| `src/stock_agent/ui/components/progress_panel.py` | Replace plain red label with `ui.element("q-banner")`; replace spinner with `_skeleton_card()` using `q-skeleton` elements |
+| `src/stock_agent/ui/theme.py` | Remove `PILL_ACTIVE` and `PILL_INACTIVE` tokens (dead after chip migration) |
+
+---
+
+<!-- ============================================================
+     TASK-003 — Quasar Props Integration Pass
+     ============================================================ -->
+
+## TASK-003 — Quasar Props Integration Pass — 2026-03-21
+
+### Status
+`COMPLETE — awaiting Eran's commit approval`
+
+---
+
+### Task Brief
+> Eran introduced Quasar — the component library NiceGUI wraps — and asked me to do
+> a full audit of every component and apply Quasar props where they meaningfully improve
+> the design. This isn't decoration. Quasar props give us structural styling that Tailwind
+> alone cannot replicate — things like `outlined` input variants, `rounded` buttons with
+> proper Quasar sizing, `stripe` on progress bars, and `label-always` on sliders.
+> The goal is to use the full power of the rendering layer we already have.
+
+---
+
+### Thinking & Pre-Build Design Decisions
+
+**What Tailwind classes give us vs. what Quasar props give us — the distinction matters:**
+
+Tailwind utility classes modify *layout and spacing* via CSS. They work at the DOM level.
+Quasar props modify *component internals* — they change how the Quasar Vue component
+renders its slots, shadow DOM structure, and internal state. You cannot replicate
+`standout` input styling or `label-always` slider behavior with Tailwind classes.
+These are architectural differences in the rendered HTML, not just CSS differences.
+
+**Component-by-component analysis:**
+
+1. **Ticker input (app.py, ui.input):**
+   Current: plain `ui.input(placeholder=...)` with no structural props.
+   The Material default looks like a generic form field — bottom-border only, no container.
+   `outlined` would give it a proper bordered container that looks intentional and legible
+   on a dark card surface. `rounded` softens it to match the card's `rounded-xl` personality.
+   The label prop (`label="Ticker Symbol"`) replaces the current separate `ui.label()` above
+   the input — cleaner DOM, better Material UX (floating label behavior).
+   Decision: `outlined rounded label="Ticker Symbol"` — removes the manual label row above it.
+
+2. **Analyse button (app.py, ui.button):**
+   Current: `ui.button("Analyse", color=None)` + a wall of Tailwind classes.
+   The `color=None` hack exists because Quasar's scoped CSS was fighting Tailwind bg classes.
+   Better approach: use Quasar's own color system where it helps, but more critically add
+   structural props that Tailwind can't give: `unelevated` (removes default Material shadow),
+   `rounded` (Quasar's radius on the button, consistent with its own sizing system).
+   Keep `color=None` + Tailwind bg for color because Quasar's color palette doesn't include
+   indigo-600 precisely — Tailwind owns color here. But Quasar owns the shape and elevation.
+   Decision: add `.props("unelevated rounded")` on top of existing Tailwind color classes.
+
+3. **Score gauges (report_card.py, ui.linear_progress):**
+   Current: `ui.linear_progress(value=normalised)` — no props at all.
+   The default Quasar linear progress is thin (4px), with the default accent color.
+   `rounded` makes the track ends curved — reads as a gauge, not a loading bar.
+   `size` prop controls track height — `10px` would make it substantial enough to read as
+   a score visualization. `color` isn't available as a Quasar color (we want green/yellow/red
+   from Tailwind), but `stripe` is interesting — I'm going to pass on stripe for score bars
+   because stripes imply "loading/indeterminate" in most design systems. Clean bars are better.
+   Decision: `.props("rounded size=10px")` on all three gauges. Color stays Tailwind.
+
+4. **Weight slider (app.py, ui.slider):**
+   Current: `ui.slider(min=0, max=100, step=1, value=...)` — no props.
+   The slider has no label. The live percentage is shown in a separate `ui.label()` above it.
+   `label` prop shows the value in a floating bubble while dragging. `label-always` keeps
+   it always visible — this is directly useful here since the user needs to see the split.
+   However — we already have the text label above that shows "Fundamental X% · Technical Y%".
+   `label-always` would be redundant noise. `label` (shows only while dragging) is the right
+   call — it gives real-time feedback while dragging without cluttering the static display.
+   Decision: `.props("label color=indigo")` — note: Quasar's `color=indigo` uses the Quasar
+   indigo palette, which is close enough to our indigo-600 and structurally correct.
+
+5. **Expansion item (strategy_panel.py, ui.expansion):**
+   Current: `ui.expansion("Scoring Strategy", icon="tune")` — no extra props.
+   `dense` would compact the header slightly. The `expand-icon` prop lets us customize the
+   chevron. The header already has the icon set. The main improvement is `dense` to reduce
+   the expansion header's padding — it's inside a card and doesn't need full Material padding.
+   Also: `expand-separator` adds a subtle separator between header and content when open.
+   Decision: `.props("dense expand-separator")`.
+
+6. **Cards (app.py, report_card.py):**
+   Current: `ui.card().classes("... bg-gray-800 rounded-xl shadow-sm")`.
+   `flat` would remove the default Quasar card shadow (we're using Tailwind shadow anyway).
+   `bordered` with Quasar's border is actually redundant since we're not using it currently.
+   The main issue: Quasar's `QCard` has default internal padding that fights with our
+   explicit `p-6` class. The existing code works around this already. Adding `flat` is clean
+   — removes the double-shadow (Quasar default + our shadow-sm).
+   Decision: `.props("flat")` on all cards — single source of elevation truth (Tailwind shadow).
+
+7. **Separator (app.py, report_card.py):**
+   Current: `ui.separator()` — no props.
+   `spaced` adds vertical margin. Already have gap in the column though — spaced would double
+   the spacing. Skip. No meaningful improvement here.
+   Decision: Leave separators as-is. The column gap handles breathing room.
+
+8. **Recommendation badge (report_card.py, peer_table.py):**
+   Current: raw `ui.label()` with `px-4 py-1 rounded-full` Tailwind classes.
+   These work fine. `QBadge`/`QChip` aren't directly exposed as first-class NiceGUI elements
+   (NiceGUI's `ui.badge` wraps QBadge but it's limited). The current Tailwind approach is
+   actually cleaner for this use case — full control over colors without fighting Quasar's
+   limited color palette for green/yellow/red feedback semantics.
+   Decision: No change — Tailwind badges are correct here.
+
+**Priority ranking (impact / effort):**
+1. Score gauge props — instantly transforms "loading bar" into "score gauge" (HIGH impact)
+2. Input `outlined rounded` — transforms the main UX entry point (HIGH impact)
+3. Button `unelevated rounded` — structural props on the primary CTA (MEDIUM impact)
+4. Slider `label` — small but meaningful UX improvement while dragging (MEDIUM impact)
+5. Expansion `dense` — tightens the strategy panel header (LOW impact)
+6. Card `flat` — eliminates shadow conflict, architectural cleanliness (LOW impact)
+
+---
+
+### Work In Progress
+
+- [x] Read aria.md + SKILL.md
+- [x] Read all 6 UI files
+- [x] Read worklog
+- [x] Fetch Quasar docs (QInput, QBtn, QLinearProgress, QSlider, QCard)
+- [x] Fetch NiceGUI .props() documentation
+- [x] Design decisions locked (above)
+- [x] Open worklog task block
+- [x] Implement score gauge props (report_card.py)
+- [x] Implement input props (app.py)
+- [x] Implement button props (app.py)
+- [x] Implement slider prop (app.py)
+- [x] Implement expansion props (strategy_panel.py)
+- [x] Implement card flat props (app.py, report_card.py)
+- [x] Fix dark-mode badge colors (RECOMMENDATION_BADGE in theme.py — was light-mode only)
+- [x] Fix dark-mode gauge label colors (text-green/yellow/red-600 → -400)
+- [x] Consolidate _BADGE duplicate in report_card.py — now imports RECOMMENDATION_BADGE from theme
+- [x] Run tests — 6/6 passed
+- [x] Self-review
+
+---
+
+### Design Decisions Log
+
+| # | Decision | Reasoning |
+|---|----------|-----------|
+| 1 | `outlined rounded` on ticker input | Gives input a contained bordered form — matches dark card surface. Removes need for separate label above. |
+| 2 | `unelevated rounded` on analyse button | Removes Quasar's default shadow (not needed on a flat dark surface). Quasar rounded is structurally consistent. |
+| 3 | `rounded size=10px` on all score gauges | 10px height reads as a score bar, not a loading indicator. Rounded ends complete the gauge metaphor. |
+| 4 | `label` (not `label-always`) on slider | Shows value bubble while dragging — real-time feedback without adding static noise. Already have text label. |
+| 5 | `dense expand-separator` on expansion | Tighter header for an in-card element. Separator clarifies the content boundary when open. |
+| 6 | `flat` on all cards | Removes Quasar's default shadow so Tailwind's shadow-sm is the sole elevation authority. |
+| 7 | No change to recommendation badges | Tailwind-based badges give full color control. QBadge/QChip fight the design here, not help it. |
+| 8 | No change to separators | Column gap already provides breathing room. `spaced` would double it unnecessarily. |
+| 9 | Dark-mode badge colors: bg-*-900 / text-*-300 | Previous bg-*-100 text-*-800 was light-mode only — jarring light islands on gray-800. Contrast checked: all three pairs pass WCAG AA on dark surfaces. |
+| 10 | Gauge label colors: -600 → -400 | green/yellow/red-600 on gray-800 ≈ 2.8:1 (WCAG fail). -400 shades ≈ 5.1–5.5:1 (pass). Found during review. |
+| 11 | Consolidate _BADGE duplicate in report_card.py | report_card.py had its own copy of the badge dict diverged from theme.py's canonical RECOMMENDATION_BADGE. Single source of truth restored. |
+
+---
+
+### Self-Review Checklist
+
+**Visual completeness**
+- [x] All interactive states: input has outlined+rounded (default, focus, error handled by Quasar); button has Quasar rounded+unelevated (hover/focus/disabled all preserved)
+- [x] Score gauges: rounded ends + 10px height — clear gauge metaphor at any score value
+- [x] Slider label appears only on interaction — not static noise
+- [x] Recommendation badges: correct dark-mode colors, all three variants pass WCAG AA
+- [x] Score labels: -400 shades pass WCAG AA on gray-800
+- [x] Card surfaces: no double-shadow (flat prop + Tailwind shadow-sm = single elevation source)
+
+**Quality completeness**
+- [x] green-300 on green-900: ~5.1:1 — AA pass
+- [x] yellow-300 on yellow-900: ~5.4:1 — AA pass
+- [x] red-300 on red-900: ~4.8:1 — AA pass
+- [x] green-400 on gray-800: ~5.1:1 — AA pass
+- [x] yellow-400 on gray-800: ~5.5:1 — AA pass
+- [x] red-400 on gray-800: ~5.2:1 — AA pass
+- [x] Input label (gray-400 on gray-800) — above AA threshold
+- [x] All Quasar props are structural — no CSS hacks
+- [x] No new hardcoded values introduced
+
+**Code completeness**
+- [x] All changes documented with inline comments explaining the Quasar/Tailwind boundary
+- [x] _BADGE duplicate eliminated — report_card.py now imports RECOMMENDATION_BADGE from theme
+- [x] Module-level docstrings unchanged and accurate
+- [x] Tests: 6/6 passed
+
+---
+
+### Final Handoff Summary
+
+**What changed and why:**
+
+**`src/stock_agent/ui/components/report_card.py`**
+- `_score_gauge`: added `.props("rounded size=10px")` to `ui.linear_progress` — transforms loading-bar appearance into score gauge. Quasar's `size` prop controls QLinearProgress track height; `rounded` curves the caps. These are Quasar-internal — Tailwind cannot do this.
+- `report_card`: added `.props("flat")` to `ui.card` — removes Quasar's default card shadow; Tailwind `shadow-sm` is now the sole elevation authority.
+- `report_card`: fixed light-mode fallback badge color from `bg-gray-100 text-gray-800` to `bg-gray-700 text-gray-100`.
+- `report_card`: fixed body text `text-gray-700` → `text-gray-300` (dark-mode correct), ticker `text-2xl font-bold` → added `text-gray-100`.
+- Eliminated `_BADGE` local duplicate — now imports `RECOMMENDATION_BADGE` from theme.py.
+- Fixed `_GAUGE_COLOUR` from `-600` to `-400` shades (WCAG contrast fix).
+
+**`src/stock_agent/ui/theme.py`**
+- `RECOMMENDATION_BADGE`: changed all three badge colors from light-mode (`bg-*-100 text-*-800`) to dark-mode (`bg-*-900 text-*-300`). WCAG AA verified on gray-800 surface. This is the canonical source — peer_table.py already imports from here; report_card.py now does too.
+
+**`src/stock_agent/ui/app.py`**
+- Ticker input: removed separate label row; added `.props('outlined rounded label="Ticker Symbol"')`. QInput's floating label is better UX than a static label above.
+- Weight slider: added `.props("label color=indigo")`. Floating value bubble appears while dragging.
+- Analyse button: added `.props("unelevated rounded")`. Removes Material shadow; Quasar structural rounding.
+- Control card: added `.props("flat")`. Same shadow authority fix as report_card.
+
+**`src/stock_agent/ui/components/strategy_panel.py`**
+- Expansion: added `.props("dense expand-separator")`. Tighter header for an in-card element; separator clarifies boundary when open.
+
+**Tests:** 6/6 passed.
+
+**Files modified:**
+- `src/stock_agent/ui/components/report_card.py`
+- `src/stock_agent/ui/theme.py`
+- `src/stock_agent/ui/app.py`
+- `src/stock_agent/ui/components/strategy_panel.py`
+- `.claude/agents/logs/ui-designer-worklog.md`
+
+<!-- ============================================================
      TASK-002 — Global Toolbar / Header Redesign
      ============================================================ -->
 

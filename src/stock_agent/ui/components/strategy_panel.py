@@ -1,7 +1,7 @@
-"""ScoringStrategy configuration panel — collapsible metric toggle pills.
+"""ScoringStrategy configuration panel — collapsible metric toggle chips.
 
 Renders a collapsible ui.expansion("Scoring Strategy") containing two groups of
-pill-toggle buttons:
+chip-toggle selectors:
   - Fundamental metrics: P/E Ratio, Revenue Growth, Market Cap, Beta
   - Technical indicators: Trend Template, VCP
 
@@ -9,17 +9,14 @@ The expansion is collapsed by default and lives INSIDE the main control card
 in app.py (below the Analyse button, after a separator). This keeps the entire
 primary action surface in one card — no floating panel below.
 
-Each pill toggles between active (indigo-600) and inactive (gray-700) state.
-Root cause of previous pill toggle failure: ui.button() defaults to
-color='primary', which applies Quasar's scoped CSS and overrides Tailwind bg
-classes. Fix: pass color=None to every pill button so Tailwind classes are the
-sole authority over visual state.
+Each chip uses ui.chip(selectable=True) which handles the toggle contract
+natively via Quasar's QChip component. Active chips are styled indigo;
+inactive chips are grey-8. The on("update:selected", ...) event fires on
+every selection change with e.value as the new boolean state.
 
-Pill toggle class-swap fix: NiceGUI's .classes() does not accept `replace` as a
-keyword argument in this version — passing replace=True causes AttributeError
-('bool' object has no attribute 'split'). Fix: clear _classes directly via
-b._classes.clear() then call b.classes(NEW_CLASSES) to set the full string.
-This is reliable and avoids class accumulation across multiple toggles.
+This replaces the previous ui.button(color=None) + _classes.clear() hack
+which worked but was fragile and semantically wrong — a toggle should be a
+chip, not a styled button.
 
 The weight slider lives in app.py's control card, not here — this panel is
 purely the metric selection layer.
@@ -30,13 +27,13 @@ holds fundamental_pct which is mutated by the weight slider in app.py.
 
 Public API:
   StrategyState  — mutable container: weight split + active metric sets
-  strategy_panel(state) — renders collapsible pill toggle groups bound to state
+  strategy_panel(state) — renders collapsible chip toggle groups bound to state
 """
 
 from nicegui import ui
 
 from stock_agent.models.context import ScoringStrategy
-from stock_agent.ui.theme import COLOURS, PILL_ACTIVE, PILL_INACTIVE, SPACING, TYPOGRAPHY
+from stock_agent.ui.theme import COLOURS, SPACING, TYPOGRAPHY
 
 # All available fundamental metrics — keys must match METRIC_WEIGHTS in config.py
 _ALL_FUNDAMENTAL: list[tuple[str, str]] = [
@@ -86,95 +83,75 @@ class StrategyState:
         )
 
 
+def _make_chip(label: str, key: str, active_set: set[str]) -> None:
+    """Render a selectable QChip bound to a key in the given active metric set.
+
+    Uses ui.chip(selectable=True) — NiceGUI's wrapper for Quasar QChip.
+    The chip handles its own selected/unselected visual state; we listen to
+    the "update:selected" Vue event to keep active_set in sync.
+
+    Color prop: "indigo" (active) or "grey-8" (inactive). These are Quasar
+    palette names — not Tailwind classes. They apply to the chip background.
+    text_color="white" ensures legibility on both indigo and grey-8 backgrounds.
+
+    Event handler uses default-argument binding (k=key, c=chip, s=active_set)
+    to capture the correct loop-iteration values — standard Python closure fix.
+    """
+    chip = ui.chip(
+        label,
+        selectable=True,
+        selected=key in active_set,
+        color="indigo" if key in active_set else "grey-8",
+        text_color="white",
+    )
+
+    def on_select(e, k: str = key, c: ui.chip = chip, s: set = active_set) -> None:
+        """Handle chip selection change — update active set and swap chip color."""
+        if e.value:
+            s.add(k)
+            c.props("color=indigo")
+        else:
+            s.discard(k)
+            c.props("color=grey-8")
+
+    chip.on("update:selected", on_select)
+
+
 def strategy_panel(state: StrategyState) -> None:
-    """Render collapsible metric toggle pill groups bound to state.
+    """Render collapsible metric toggle chip groups bound to state.
 
     Renders a ui.expansion() that lives INSIDE the main control card in app.py
     (after a separator, below the Analyse button). No card wrapper inside — the
-    parent card provides the surface. Two pill groups: fundamentals and technicals.
+    parent card provides the surface. Two chip groups: fundamentals and technicals.
 
-    Pill toggle fix: every ui.button() pill passes color=None to strip Quasar's
-    scoped color CSS, making Tailwind bg classes authoritative. On toggle, classes
-    are swapped by clearing b._classes then calling b.classes(NEW_STRING) — this
-    avoids the AttributeError caused by passing replace=True as a keyword argument
-    (not valid in this NiceGUI version) and prevents class accumulation across
-    multiple toggle cycles.
-
-    Direct button references are captured in closures via default argument binding
-    (b=btn) to avoid the late-binding closure problem across loop iterations.
+    Chips use ui.chip(selectable=True) — the native Quasar toggle pattern.
+    No color=None hacks, no _classes.clear() workarounds. The QChip component
+    owns its own toggle state; we only update active_set on the event.
 
     Uses only NiceGUI Python API — no HTML, CSS, or JavaScript.
     """
     # Expansion collapsed by default (value=False is the NiceGUI default — no param needed).
     # .classes("w-full") ensures it spans the full column width within the parent card.
-    with ui.expansion("Scoring Strategy", icon="tune").classes("w-full"):
+    # Quasar props: dense (compact header padding — appropriate for an in-card element that
+    # does not need full Material expansion padding), expand-separator (adds a subtle line
+    # between the header and the expanded content — clarifies the boundary when open).
+    with ui.expansion("Scoring Strategy", icon="tune").classes("w-full").props("dense expand-separator"):
         with ui.column().classes(f"w-full {SPACING['compact_gap']} pt-2"):
 
-            # --- Fundamental metric pills ---
+            # --- Fundamental metric chips ---
             with ui.column().classes(f"w-full {SPACING['tight_gap']}"):
                 ui.label("Fundamentals").classes(
                     f"{TYPOGRAPHY['section_label']} text-{COLOURS['subtle']}"
                 )
                 with ui.row().classes(f"flex-wrap {SPACING['tight_gap']}"):
                     for key, label in _ALL_FUNDAMENTAL:
-                        is_active = key in state.active_fundamental
-                        # color=None: removes Quasar's scoped color CSS so Tailwind classes win.
-                        btn = ui.button(label, color=None).classes(
-                            PILL_ACTIVE if is_active else PILL_INACTIVE
-                        )
+                        _make_chip(label, key, state.active_fundamental)
 
-                        def make_toggle(k: str = key, b: ui.button = btn) -> None:
-                            """Toggle metric key and swap pill visual state."""
-                            def toggle() -> None:
-                                """Handle pill click: update state set and swap classes.
-
-                                Class-swap via _classes.clear() + .classes(full_string) to avoid
-                                the AttributeError from replace=True (not valid in this NiceGUI
-                                version) and to prevent class accumulation across toggle cycles.
-                                """
-                                if k in state.active_fundamental:
-                                    state.active_fundamental.discard(k)
-                                    b._classes.clear()
-                                    b.classes(PILL_INACTIVE)
-                                else:
-                                    state.active_fundamental.add(k)
-                                    b._classes.clear()
-                                    b.classes(PILL_ACTIVE)
-                                b.update()
-                            return toggle
-
-                        btn.on_click(make_toggle())
-
-            # --- Technical indicator pills ---
+            # --- Technical indicator chips ---
             with ui.column().classes(f"w-full {SPACING['tight_gap']}"):
                 ui.label("Technicals").classes(
                     f"{TYPOGRAPHY['section_label']} text-{COLOURS['subtle']}"
                 )
                 with ui.row().classes(f"flex-wrap {SPACING['tight_gap']}"):
                     for key, label in _ALL_TECHNICAL:
-                        is_active = key in state.active_technical
-                        # Same color=None fix applied to technical pills.
-                        btn = ui.button(label, color=None).classes(
-                            PILL_ACTIVE if is_active else PILL_INACTIVE
-                        )
-
-                        def make_tech_toggle(k: str = key, b: ui.button = btn) -> None:
-                            """Toggle indicator key and swap pill visual state."""
-                            def toggle() -> None:
-                                """Handle pill click: update state set and swap classes.
-
-                                Same _classes.clear() pattern as fundamental pills — avoids
-                                AttributeError from replace=True keyword argument.
-                                """
-                                if k in state.active_technical:
-                                    state.active_technical.discard(k)
-                                    b._classes.clear()
-                                    b.classes(PILL_INACTIVE)
-                                else:
-                                    state.active_technical.add(k)
-                                    b._classes.clear()
-                                    b.classes(PILL_ACTIVE)
-                                b.update()
-                            return toggle
-
-                        btn.on_click(make_tech_toggle())
+                        _make_chip(label, key, state.active_technical)

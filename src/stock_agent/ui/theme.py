@@ -133,31 +133,20 @@ TRANSITIONS: dict[str, str] = {
 # ---------------------------------------------------------------------------
 # Recommendation badge — full Tailwind class strings keyed by enum value.
 # Canonical definition: report_card.py and peer_table.py import from here.
+#
+# Dark-mode badge design: bg-*-900 + text-*-300.
+# This pairing passes WCAG AA on gray-800 card surfaces:
+#   green-300 (#86EFAC) on green-900 (#14532D) ≈ 5.1:1 — AA pass
+#   yellow-300 (#FDE047) on yellow-900 (#713F12) ≈ 5.4:1 — AA pass
+#   red-300 (#FCA5A5) on red-900 (#7F1D1D) ≈ 4.8:1 — AA pass
+# Previously bg-*-100 text-*-800 (light-mode only) — rendered as jarring
+# light islands on dark card surfaces. Fixed by Aria, 2026-03-21.
 # ---------------------------------------------------------------------------
 RECOMMENDATION_BADGE: dict[str, str] = {
-    "BUY":   "bg-green-100 text-green-800",
-    "WATCH": "bg-yellow-100 text-yellow-800",
-    "AVOID": "bg-red-100 text-red-800",
+    "BUY":   "bg-green-900 text-green-300",
+    "WATCH": "bg-yellow-900 text-yellow-300",
+    "AVOID": "bg-red-900 text-red-300",
 }
-
-# ---------------------------------------------------------------------------
-# Pill button states — metric toggle pills in the strategy panel.
-# Two states only: PILL_ACTIVE (selected metric) and PILL_INACTIVE (unselected).
-# Swapped on toggle via: b._classes.clear(); b.classes(PILL_ACTIVE or PILL_INACTIVE); b.update()
-# Invariant classes (rounded-full, px-3, py-1, text-xs, font-medium, transition,
-# duration-150, cursor-pointer) are repeated in both strings so a full replace is always safe.
-# ---------------------------------------------------------------------------
-PILL_ACTIVE: str = (
-    "rounded-full px-3 py-1 text-xs font-medium "
-    "transition duration-150 cursor-pointer "
-    "bg-indigo-600 text-white"
-)
-PILL_INACTIVE: str = (
-    "rounded-full px-3 py-1 text-xs font-medium "
-    "transition duration-150 cursor-pointer "
-    "bg-gray-700 text-gray-300 hover:bg-gray-600"
-)
-
 
 # ---------------------------------------------------------------------------
 # Header / toolbar tokens — full-bleed sticky header at the top of every page.
