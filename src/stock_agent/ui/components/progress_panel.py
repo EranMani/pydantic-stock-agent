@@ -17,14 +17,7 @@ Public API:
 from nicegui import ui
 
 from stock_agent.models.report import StockReport
-
-
-# Recommendation badge colours
-_BADGE_COLOUR: dict[str, str] = {
-    "BUY":   "bg-green-100 text-green-800",
-    "WATCH": "bg-yellow-100 text-yellow-800",
-    "AVOID": "bg-red-100 text-red-800",
-}
+from stock_agent.ui.components.report_card import report_card
 
 
 class AnalysisState:
@@ -63,38 +56,19 @@ def progress_panel(state: AnalysisState) -> None:
         error_label.bind_text_from(state, "error", backward=lambda e: f"Error: {e}" if e else "")
         error_label.bind_visibility_from(state, "error", backward=lambda e: bool(e))
 
-        # --- Minimal result card (replaced by report_card.py in Step 34) ---
+        # --- Full report card (from report_card.py) ---
         @ui.refreshable
-        def result_card() -> None:
-            """Render a minimal result card — rebuilt whenever .refresh() is called."""
-            if state.result is None:
-                return
+        def result_section() -> None:
+            """Render the full StockReport card — rebuilt whenever .refresh() is called."""
+            if state.result is not None:
+                report_card(state.result)
 
-            r = state.result
-            colour = _BADGE_COLOUR.get(r.recommendation, "")
+        result_section()
 
-            with ui.card().classes("w-full"):
-                with ui.row().classes("items-center justify-between w-full"):
-                    ui.label(r.ticker).classes("text-xl font-bold")
-                    ui.label(r.recommendation).classes(
-                        f"px-3 py-1 rounded-full text-sm font-semibold {colour}"
-                    )
-
-                with ui.row().classes("gap-6 mt-2"):
-                    ui.label(f"Weighted Score: {r.weighted_score:.2f} / 10").classes("text-sm")
-                    ui.label(f"Fundamental: {r.fundamental_score:.2f}").classes("text-sm text-gray-500")
-                    ui.label(f"Technical: {r.technical_score:.2f}").classes("text-sm text-gray-500")
-
-                ui.separator()
-                ui.label(r.summary).classes("text-sm text-gray-700 mt-2")
-
-        result_card()
-
-        # Refresh the result card whenever state.result changes
-        # ui.timer checks every 0.2s — replaced by event-driven refresh in Step 34
+        # Refresh the result section whenever a result arrives
         def _maybe_refresh() -> None:
-            """Trigger result_card refresh when a result arrives."""
+            """Trigger result_section refresh when analysis completes."""
             if state.result is not None and not state.is_running:
-                result_card.refresh()
+                result_section.refresh()
 
         ui.timer(0.2, _maybe_refresh)
