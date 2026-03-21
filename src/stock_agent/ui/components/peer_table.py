@@ -13,13 +13,7 @@ Public API:
 from nicegui import ui
 
 from stock_agent.models.report import PeerReport
-
-# Recommendation badge colours — matches report_card.py
-_BADGE: dict[str, str] = {
-    "BUY":   "bg-green-100 text-green-800",
-    "WATCH": "bg-yellow-100 text-yellow-800",
-    "AVOID": "bg-red-100 text-red-800",
-}
+from stock_agent.ui.theme import COLOURS, RECOMMENDATION_BADGE, TYPOGRAPHY
 
 
 def peer_table(peers: list[PeerReport]) -> None:
@@ -32,22 +26,32 @@ def peer_table(peers: list[PeerReport]) -> None:
     Uses only NiceGUI Python API — no HTML, CSS, or JavaScript.
     """
     if not peers:
-        ui.label("No peer data available.").classes("text-sm text-gray-400 italic")
+        ui.label("No peer data available.").classes(f"text-sm text-{COLOURS['muted']} italic")
         return
 
     with ui.column().classes("w-full gap-1"):
-        # Header row
-        with ui.row().classes("w-full px-2 py-1 bg-gray-50 rounded text-xs font-semibold text-gray-500 uppercase tracking-wide"):
+        # Header row — bg-gray-700 (surface_raised) is the correct dark-mode elevated surface
+        with ui.row().classes(
+            f"w-full px-2 py-1 bg-{COLOURS['surface_raised']} rounded "
+            f"{TYPOGRAPHY['section_label']} text-{COLOURS['subtle']}"
+        ):
             ui.label("Ticker").classes("w-24")
             ui.label("Score").classes("w-20 text-center")
             ui.label("Rating").classes("flex-1 text-center")
 
-        # Data rows
+        # Data rows — border-gray-700 (border token) is visible on the dark surface
         for peer in peers:
-            badge_classes = _BADGE.get(peer.recommendation, "bg-gray-100 text-gray-800")
-            with ui.row().classes("w-full px-2 py-2 items-center border-b border-gray-100"):
-                ui.label(peer.ticker).classes("w-24 text-sm font-medium")
-                ui.label(f"{peer.weighted_score:.1f} / 10").classes("w-20 text-sm text-center")
+            badge_classes = RECOMMENDATION_BADGE.get(
+                peer.recommendation,
+                f"bg-{COLOURS['surface_raised']} text-{COLOURS['body']}",
+            )
+            with ui.row().classes(
+                f"w-full px-2 py-2 items-center border-b border-{COLOURS['border']}"
+            ):
+                ui.label(peer.ticker).classes(f"w-24 text-sm font-medium text-{COLOURS['body']}")
+                ui.label(f"{peer.weighted_score:.1f} / 10").classes(
+                    f"w-20 text-sm text-center text-{COLOURS['body']}"
+                )
                 with ui.row().classes("flex-1 justify-center"):
                     ui.label(peer.recommendation).classes(
                         f"px-3 py-0.5 rounded-full text-xs font-semibold {badge_classes}"
