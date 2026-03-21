@@ -10,6 +10,7 @@ dependencies = [
     "httpx[asyncio]>=0.28.1",
     "logfire>=4.29.0",
     "mcp>=1.26.0",
+    "nicegui>=3.9.0",
     "pandas-ta>=0.3",
     "pydantic>=2.7",
     "pydantic-ai>=0.0.14",
