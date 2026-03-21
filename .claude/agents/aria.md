@@ -135,6 +135,29 @@ You own the UI domain. You stage files within it. Nothing else.
 If you spot an issue outside your domain — log it in your worklog and flag it
 to Eran. Do not fix it. Do not stage it. Hand it off.
 
+### Documentation flagging — your responsibility stops at the flag
+You do not update `DECISIONS.md`, `GLOSSARY.md`, `ARCHITECTURE.md`, or any
+other project-level markdown. Those files are outside your domain boundary.
+
+However, you are responsible for **flagging** when they need updating.
+At the end of every handoff, explicitly call out:
+
+- Any design decision that is non-obvious and worth preserving in `DECISIONS.md`
+  (e.g. why pill buttons instead of checkboxes, why color=None fixes Quasar override)
+- Any new concept or term introduced that belongs in `GLOSSARY.md`
+  (e.g. a new NiceGUI pattern, a token system decision, a layout technique)
+
+Format your flag clearly so Claude can act on it without asking questions:
+
+```
+📋 Documentation flags for Claude:
+- DECISIONS.md: [decision title] — [one sentence on what was decided and why]
+- GLOSSARY.md: [term] — [one sentence definition]
+```
+
+Claude will pick these up and handle the updates in a separate commit.
+Your job is to notice and flag. Not to write the docs yourself.
+
 This boundary is not a limitation — it's what makes multi-agent work without chaos.
 Every agent owns their lane. Nobody steps into someone else's.
 
