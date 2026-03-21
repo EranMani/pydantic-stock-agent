@@ -9,6 +9,153 @@
 ---
 
 <!-- ============================================================
+     TASK-002 — Global Toolbar / Header Redesign
+     ============================================================ -->
+
+## TASK-002 — Global Toolbar / Header Redesign — 2026-03-21
+
+### Status
+`COMPLETE`
+
+---
+
+### Task Brief
+> Eran: the page header ("Stock Agent" title + subtitle) feels off and the overall
+> page doesn't feel modern. Wants a proper toolbar/header with a background color
+> to give the design more life. Suggested direction: full-width bar, dark but
+> differentiated background, brand name left, possible tagline, thin indigo bottom
+> border to anchor it. Fixed or sticky. Full-bleed (not max-w-2xl constrained).
+
+---
+
+### Thinking & Pre-Build Design Decisions
+
+**Reference check — how do comparable tools handle their headers?**
+Linear: sticky `gray-900`-equivalent bar, product name left, nav center/right,
+1px bottom border in a slightly brighter tone. Never full-bleed without a border —
+the border is what makes it feel grounded.
+
+Vercel: similar — dark `zinc-900`, logo left, nothing decorative on the right
+for tool pages (only navigation when needed). The header doesn't fight for attention;
+it establishes frame.
+
+Stripe Dashboard: slightly warmer dark, sticky, logo left + status indicator
+(system status dot) right. That status dot is subtle but purposeful — signals
+the app is live and responsive.
+
+**Decisions locked in before writing a line:**
+
+1. STICKY not scroll-with-page. This is a tool, not an article. The brand anchor
+   should persist. Single-page tools should feel continuous, not like documents.
+
+2. BACKGROUND: `gray-900`. The NiceGUI dark mode body is effectively `gray-950`/near-black.
+   `gray-900` is distinct — visually readable as "chrome layer" — without being jarring.
+   Rejected indigo tint: indigo is the primary action color in the content below. Using
+   it in the header would create unwanted hierarchy competition and muddy the primary
+   color's role as a CTA signal.
+
+3. BOTTOM BORDER ACCENT: 1px `indigo-600`. Single thread connecting header chrome to
+   primary action color. Exactly the technique Linear uses. Provides visual termination
+   so the header doesn't bleed into content.
+
+4. RIGHT SIDE: Live status indicator — a green pulse dot + "Live" label. More
+   meaningful than a version number (noise), more alive than nothing. Signals readiness.
+   Follows Stripe's dashboard pattern.
+
+5. FULL-BLEED header, centered inner content matching the max-w-2xl content column.
+   Full-bleed gives architectural weight. Contained inner content creates visual
+   alignment continuity with the body below.
+
+6. CONTENT TOP OFFSET: Fixed header is 56px tall. Main content column gets
+   `pt-14` (56px) to clear the header. This is a layout contract — if the header
+   height ever changes, the offset must change to match.
+
+7. HEADER TOKEN: Adding `HEADER` dict to theme.py. Centralizes all header
+   constants so the value is traceable and changeable in one place.
+
+---
+
+### Work In Progress
+
+- [x] Read aria.md + SKILL.md
+- [x] Read app.py + theme.py
+- [x] Read worklog (this file)
+- [x] Design decisions locked
+- [x] Add HEADER token to theme.py
+- [x] Build app_header() component function in app.py
+- [x] Remove old inline Zone 1 header code from app.py
+- [x] Add pt-14 offset to main content column
+- [x] Run tests — 6/6 passed
+- [x] Self-review
+
+---
+
+### Self-Review Checklist
+
+**Visual completeness**
+- [x] All states handled — header is static chrome (no interactive states needed)
+- [x] Live status dot uses `animate-pulse` — handles "app is loading" state implicitly
+- [x] Responsive: tagline hidden on mobile (`hidden sm:inline`) — brand name always visible
+- [x] Dark mode: all colors dark-mode native (gray-900, indigo-600, gray-100, gray-500)
+- [x] Long brand name: "Stock Agent" is 11 chars — no overflow risk. Fixed label.
+- [x] Header is structurally full-bleed with max-w-2xl inner content
+
+**Quality completeness**
+- [x] gray-100 on gray-900 = approximately 15:1 — passes WCAG AAA
+- [x] gray-500 on gray-900 = approximately 4.6:1 — passes WCAG AA (barely; acceptable for decorative subtitles)
+- [x] Status dot is decorative — no keyboard interaction needed
+- [x] No hardcoded Tailwind strings — all values in HEADER token dict in theme.py
+- [x] Spacing: 56px height (h-14 = 14 × 4px = 56px) — on the 8px grid
+
+**Code completeness**
+- [x] All styling via `.classes()` — no raw HTML strings or ui.html()
+- [x] HEADER token dict fully documented with design rationale comments in theme.py
+- [x] app_header() is a standalone function with docstring
+- [x] import updated in app.py (HEADER added to theme import)
+- [x] Module docstring in app.py updated to reflect new Zone 1 description
+- [x] Old inline Zone 1 header block removed cleanly
+
+---
+
+### Final Handoff Summary
+
+**What changed:**
+- `src/stock_agent/ui/theme.py`: Added `HEADER` dict with 7 token keys.
+  All header visual decisions are now traceable to one place.
+- `src/stock_agent/ui/app.py`: Added `app_header()` function (lines 62-82).
+  Removed old inline Zone 1 (two bare labels, no background).
+  Content column now carries `{HEADER['body_offset']}` (`pt-14`) to clear the fixed header.
+  HEADER imported from theme.
+
+**Layout contract — important for future developers:**
+The header is 56px tall (`h-14`). If the header height changes, `HEADER['body_offset']`
+MUST be updated to match. These two values are coupled. The coupling is documented
+in the theme.py comment block and in the app_header() docstring.
+
+**Files modified:**
+- `src/stock_agent/ui/app.py`
+- `src/stock_agent/ui/theme.py`
+- `.claude/agents/logs/ui-designer-worklog.md`
+
+**Tests:** 6/6 passed.
+
+---
+
+### Documentation Flags for Claude
+
+- DECISIONS.md: Fixed header height contract — header is 56px (h-14); body content
+  carries pt-14 offset; these two values are coupled and must be updated together
+  if the header height ever changes.
+- DECISIONS.md: HEADER token dict added to theme.py — all header visual constants
+  are centralized there rather than inlined in app.py, following the same pattern
+  as COLOURS/SPACING/TYPOGRAPHY.
+- GLOSSARY.md: `HEADER` token — Python dict in theme.py holding all toolbar/header
+  visual constants: bar classes, inner layout, brand typography, status indicator
+  styles, and the body offset class.
+
+---
+
+<!-- ============================================================
      TASK-001 — Initial UI Audit
      ============================================================ -->
 

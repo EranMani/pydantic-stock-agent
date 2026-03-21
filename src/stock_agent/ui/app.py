@@ -8,7 +8,9 @@ Entry point:
   uv run python -m stock_agent.ui.app
 
 Dashboard layout — three zones:
-  Zone 1: Header — title + subtitle, bare (no card), full width
+  Zone 1: Toolbar — full-bleed fixed header (app_header). gray-900 background,
+            indigo bottom border, brand name left, live status right. 56px tall.
+            Fixed position (z-50); does not scroll with content.
   Zone 2: Control card — single card containing everything the user touches:
             Row 1: Ticker input (full width)
             Row 2: Weight label (live update)
@@ -20,6 +22,8 @@ Dashboard layout — three zones:
   Zone 3: Progress panel — spinner while running, result card when done
 
 Layout notes:
+  - The toolbar is rendered OUTSIDE the content column — it is full-bleed and
+    fixed. The content column carries pt-14 (56px) to clear the toolbar.
   - Page column: max-w-2xl, centred — wide enough for structure, narrow enough
     for visual calm.
   - All primary interaction lives in Zone 2's single card. The strategy
@@ -43,7 +47,7 @@ from stock_agent.config import settings
 from stock_agent.models.report import StockReport
 from stock_agent.ui.components.progress_panel import AnalysisState, progress_panel
 from stock_agent.ui.components.strategy_panel import StrategyState, strategy_panel
-from stock_agent.ui.theme import COLOURS, SPACING, TRANSITIONS, TYPOGRAPHY, apply_theme
+from stock_agent.ui.theme import COLOURS, HEADER, SPACING, TRANSITIONS, TYPOGRAPHY, apply_theme
 
 # Analyse button — dominant indigo, full width, min 44px touch target.
 # Applied at initial render and re-applied after enable/disable to preserve classes.
@@ -53,6 +57,29 @@ _ANALYSE_BTN_CLASSES: str = (
     "text-white font-semibold min-h-[44px] rounded-lg "
     f"{TRANSITIONS['normal']} ease-in-out"
 )
+
+
+def app_header() -> None:
+    """Render the full-bleed sticky toolbar at the top of the page.
+
+    Fixed position (z-50), gray-900 background, indigo bottom border.
+    Brand name left, live status indicator right.
+    Inner content constrained to max-w-2xl so it aligns with the body column.
+
+    Height contract: 56px (h-14). The main content column must offset by
+    pt-14 to clear this header — that offset lives in HEADER['body_offset'].
+    """
+    with ui.element("div").classes(HEADER["bar"]):
+        with ui.element("div").classes(HEADER["inner"]):
+            # Left side — brand identity
+            with ui.row().classes("items-center gap-0"):
+                ui.label("Stock Agent").classes(HEADER["brand_name"])
+                ui.label("Autonomous PydanticAI stock analyst").classes(HEADER["brand_sub"])
+
+            # Right side — live status indicator
+            with ui.row().classes("items-center"):
+                ui.element("div").classes(HEADER["status_dot"])
+                ui.label("Live").classes(HEADER["status_label"])
 
 
 def create_ui() -> None:
@@ -66,25 +93,21 @@ def create_ui() -> None:
         """Main dashboard — four-zone layout with card surfaces."""
         apply_theme()
 
+        # Full-bleed sticky toolbar — outside the content column intentionally.
+        # Fixed position clears the page flow; the content column below is offset
+        # by pt-14 (56px) to compensate. See HEADER token in theme.py.
+        app_header()
+
         # Page-level state — one instance per browser session
         strategy_state = StrategyState()
         analysis_state = AnalysisState()
 
         # max-w-2xl: content doesn't need to be wide — it needs to be well-structured.
+        # pt-14: 56px offset to clear the fixed sticky header above.
         with ui.column().classes(
-            f"w-full max-w-2xl mx-auto {SPACING['page_padding']} {SPACING['section_gap']}"
+            f"w-full max-w-2xl mx-auto {SPACING['page_padding']} {SPACING['section_gap']} "
+            f"{HEADER['body_offset']}"
         ):
-
-            # ------------------------------------------------------------------
-            # Zone 1 — Header (bare — no card surface needed for a title block)
-            # ------------------------------------------------------------------
-            with ui.column().classes(SPACING["tight_gap"]):
-                ui.label("Stock Agent").classes(
-                    f"{TYPOGRAPHY['page_title']} text-{COLOURS['heading']}"
-                )
-                ui.label("Autonomous PydanticAI stock analyst").classes(
-                    f"{TYPOGRAPHY['body']} text-{COLOURS['muted']}"
-                )
 
             # ------------------------------------------------------------------
             # Zone 2 — Control card: all primary interaction in one surface

@@ -159,6 +159,32 @@ PILL_INACTIVE: str = (
 )
 
 
+# ---------------------------------------------------------------------------
+# Header / toolbar tokens — full-bleed sticky header at the top of every page.
+# Height is 56px (h-14). Content inside is constrained to max-w-2xl so it
+# aligns visually with the body content column below.
+#
+# Design decisions:
+#   - bg-gray-900: distinct from the near-black page body without fighting it.
+#     Indigo tint was rejected — indigo is the primary CTA color; using it in
+#     chrome creates hierarchy competition.
+#   - border-b border-indigo-600: single accent thread tying header chrome to
+#     the primary action color. Provides visual termination so header doesn't
+#     bleed into content.
+#   - fixed top-0 z-50: always visible; z-50 clears NiceGUI card surfaces.
+#   - pt-14 on body: 56px offset to clear the fixed header.
+# ---------------------------------------------------------------------------
+HEADER: dict[str, str] = {
+    "bar":        "fixed top-0 left-0 right-0 z-50 h-14 bg-gray-900 border-b border-indigo-600",
+    "inner":      "w-full max-w-2xl mx-auto px-4 h-full flex items-center justify-between",
+    "brand_name": "text-base font-semibold tracking-tight text-gray-100",
+    "brand_sub":  "text-xs text-gray-500 ml-2 hidden sm:inline",
+    "status_dot": "w-2 h-2 rounded-full bg-green-500 animate-pulse",
+    "status_label": "text-xs text-gray-500 ml-1.5",
+    "body_offset": "pt-14",
+}
+
+
 def apply_theme() -> None:
     """Apply the dark theme to the current NiceGUI page session.
 
