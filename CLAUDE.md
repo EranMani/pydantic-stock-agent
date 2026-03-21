@@ -150,7 +150,18 @@ pydantic-stock-agent/
 
 ---
 
-## Section 6 — Protocol Reference
+## Section 6 — Agents
+
+Specialised sub-agents own specific domains. Delegate work to them accordingly.
+
+- **UI/UX work** → delegate to `@ui-designer` agent
+  - Covers: components, layouts, design tokens, responsive, accessibility, UX flows, visual critique
+  - Work log: `.claude/agents/logs/ui-designer-worklog.md`
+  - Skill: `.claude/skills/ui-designer/SKILL.md`
+
+---
+
+## Section 7 — Protocol Reference
 
 ```
 @.claude/commit-protocol.md
@@ -160,7 +171,7 @@ This single line causes Claude Code to lazy-load the full 62-step roadmap when n
 
 ---
 
-## Section 7 — Environment Variables
+## Section 8 — Environment Variables
 
 `.env` keys required:
 
