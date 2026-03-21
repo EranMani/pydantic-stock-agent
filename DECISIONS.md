@@ -133,3 +133,14 @@ This log is evidence of genuine human-AI collaboration — Eran (engineer) and C
 **Decision:** Call `POST /analyze` via HTTP. When Phase 9 introduces Celery, the endpoint will return a `job_id` instead of a `StockReport` — the UI handler only needs to change what it does with the response, not how it triggers the analysis. Coupling the UI to the HTTP contract now makes Phase 9 a drop-in change.
 **Outcome:** `on_analyse()` in `app.py` uses `httpx.AsyncClient` to call the local API. Runs as an async coroutine so the NiceGUI event loop stays responsive during the 10-30s analysis.
 
+---
+
+## DEC-012 — Centralised theme module with semantic colour constants
+**Raised by:** Claude during Step 37 implementation
+**Context:** Colour values (Tailwind class fragments) were being hardcoded individually in each component. When a colour needs to change, hunting through multiple files is error-prone.
+**Options considered:**
+- Inline colours per component — simple but fragile; a colour change requires touching every file
+- Central `theme.py` with a semantic `COLOURS` dict and `RECOMMENDATION_BADGE` mapping — single source of truth, one file to update
+**Decision:** Central `theme.py`. `COLOURS` maps semantic roles (primary, success, muted, etc.) to Tailwind fragments. `RECOMMENDATION_BADGE` defines the badge classes canonical to the recommendation enum. `apply_theme()` enables dark mode per NiceGUI session. Components import from `theme.py` in future refactors.
+**Outcome:** `src/stock_agent/ui/theme.py` created. `app.py` imports and calls `apply_theme()` on every page load.
+

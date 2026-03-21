@@ -27,6 +27,7 @@ from stock_agent.config import settings
 from stock_agent.models.report import StockReport
 from stock_agent.ui.components.progress_panel import AnalysisState, progress_panel
 from stock_agent.ui.components.strategy_panel import StrategyState, strategy_panel
+from stock_agent.ui.theme import apply_theme
 
 
 def create_ui() -> None:
@@ -38,6 +39,8 @@ def create_ui() -> None:
     @ui.page("/")
     def index() -> None:
         """Main dashboard — ticker input, weight config, and analysis trigger."""
+        apply_theme()
+
         # Page-level state — one instance per browser session
         strategy_state = StrategyState()
         analysis_state = AnalysisState()
