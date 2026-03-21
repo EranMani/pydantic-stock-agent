@@ -131,16 +131,40 @@ async def get_peer_reports(
 ) -> list[PeerReport]:
     """Return peer stock analysis results for the given ticker.
 
-    Full recursive implementation (using run_analysis per peer) is added in Step 30
-    once run_analysis exists. Returns an empty list for now — the agent produces a
-    valid StockReport with an empty peers field.
+    Fetches up to 5 industry peers via yfinance, then runs run_analysis() on each
+    concurrently via asyncio.gather. Returns only the lightweight PeerReport fields
+    (ticker, weighted_score, recommendation) — not the full StockReport.
+
+    run_analysis is imported lazily inside the function body to break the circular
+    import: agent.py imports this module at the bottom (after agent is defined),
+    and this module imports agent at the top. A top-level import of run_analysis
+    would fail because run_analysis is defined after the tool imports in agent.py.
     """
-    # Step 30 will replace this body with:
-    #   peers = await fetch_industry_peers(ticker)
-    #   results = await asyncio.gather(*[run_analysis(p, ctx.deps.strategy) for p in peers[:5]])
-    #   return [PeerReport(...) for r in results]
-    _ = await fetch_industry_peers(ticker)  # validates the call is wired correctly
-    return []
+    # Lazy import — run_analysis is defined after tool module imports in agent.py,
+    # so it is not available at module load time. Import here at call time instead.
+    from stock_agent.agent import run_analysis  # noqa: PLC0415
+
+    peers = await fetch_industry_peers(ticker)
+
+    if not peers:
+        return []
+
+    # Cap at 5 peers and run all analyses concurrently
+    reports = await asyncio.gather(
+        *[run_analysis(peer, ctx.deps.strategy) for peer in peers[:5]],
+        return_exceptions=True,
+    )
+
+    # Filter out any peers that failed (network error, bad ticker, etc.)
+    return [
+        PeerReport(
+            ticker=peer,
+            weighted_score=report.weighted_score,
+            recommendation=report.recommendation,
+        )
+        for peer, report in zip(peers[:5], reports)
+        if not isinstance(report, Exception)
+    ]
 
 
 @agent.tool

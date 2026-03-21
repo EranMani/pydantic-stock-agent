@@ -29,6 +29,22 @@ decisions, code review, and iterative improvement made in collaboration with Cla
   - UI (Step 34+) can render headlines and risk flags in the report card
   **Suggested timing:** After Step 30 (peer analysis) — all pipeline tools will be wired by then.
 
+### Data Pipeline
+
+- [ ] **TASK-003** — Replace non-functional `fetch_industry_peers` with a working peer discovery strategy
+  **Raised by:** Eran during Step 30 testing
+  **Context:** yfinance's `industryPeers` field has been silently removed from the API. `fetch_industry_peers` always returns `[]`, making `get_peer_reports` a no-op. The Step 30 logic is architecturally correct but the peer data source is broken. Eran decided not to block Phase 5 completion over a data provider gap — deferred for a dedicated strategy discussion.
+  **Options considered:**
+  - DuckDuckGo peer search — dynamic but fragile (web scraping, ticker parsing)
+  - Static industry lookup table in `config.py` — reliable but needs manual maintenance
+  - Third-party financial API (e.g. Financial Modeling Prep, Polygon.io) — best coverage, adds a dependency
+  **Acceptance criteria:**
+  - `fetch_industry_peers(ticker)` returns a non-empty `list[str]` of valid peer tickers for mainstream stocks (e.g. AAPL, NVDA, MSFT)
+  - Max 5 peers enforced (slicing happens in `get_peer_reports`, not in the fetcher)
+  - Graceful fallback to `[]` if peer discovery fails — never crashes the main analysis pipeline
+  - `fetch_industry_peers` remains the only place peer discovery logic lives (no leakage into agent tools)
+  **Suggested timing:** After Phase 5 is complete (Step 30+). Requires a dedicated strategy decision before implementation.
+
 ### MCP Server
 
 - [x] **TASK-002** — Add `score_ticker` tool to the MCP server that mimics the CLI input/output without invoking the cloud LLM
