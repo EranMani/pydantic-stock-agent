@@ -10,7 +10,7 @@ description: >
   state, error state, accessibility, contrast, UX, flow, wireframe, redesign, polish,
   looks off, visual, UI, frontend, tokens, dark mode.
 allowed_tools: Read, Write, Grep, Glob, Edit, MultiEdit, Bash
-agent: ui-designer
+agent: aria
 ---
 
 # UI Designer Skill — Execution Guide

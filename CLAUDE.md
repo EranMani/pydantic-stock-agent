@@ -154,7 +154,7 @@ pydantic-stock-agent/
 
 Specialised sub-agents own specific domains. Delegate work to them accordingly.
 
-- **UI/UX work** → delegate to `@ui-designer` agent
+- **UI/UX work** → delegate to `@aria` agent
   - Covers: components, layouts, design tokens, responsive, accessibility, UX flows, visual critique
   - Work log: `.claude/agents/logs/ui-designer-worklog.md`
   - Skill: `.claude/skills/ui-designer/SKILL.md`
