@@ -277,3 +277,40 @@ slider.on_value_change(lambda e: setattr(state, 'fundamental_pct', int(e.value))
 
 ### `ffill().bfill()` chain
 The standard NaN-cleaning pattern used before passing a DataFrame to any indicator module. `ffill()` fills forward (handles middle/end gaps), `bfill()` fills backward (handles start gaps). Together guarantee zero NaN values.
+
+---
+
+## NiceGUI / UI Concepts
+
+### Design Token System
+A design token is a named constant that represents a single visual decision — a colour, a spacing value, a font size. Instead of hardcoding `"text-sm leading-relaxed"` in five different components, you define it once in `theme.py` as `TYPOGRAPHY["body"]` and reference the name everywhere.
+
+In this project, design tokens are **Python dicts in `src/stock_agent/ui/theme.py`**, mapping semantic names to Tailwind utility class strings. There are no CSS custom properties (`--color-brand`) because this project has no CSS files.
+
+The token system has six dicts:
+- `COLOURS` — colour fragments (used as `f"text-{COLOURS['muted']}"`)
+- `TYPOGRAPHY` — semantic type composites (`TYPOGRAPHY["section_label"]`)
+- `SPACING` — gap and padding classes (`SPACING["card_padding"]`)
+- `RADIUS` — border radius scale (`RADIUS["md"]`)
+- `SHADOW` — elevation scale (`SHADOW["sm"]`)
+- `TRANSITIONS` — motion utilities (`TRANSITIONS["normal"]`)
+
+```python
+# Without tokens — fragile, easy to drift across files
+ui.label("Scores").classes("text-xs font-semibold uppercase tracking-wide text-gray-500")
+
+# With tokens — single source of truth
+from stock_agent.ui.theme import TYPOGRAPHY, COLOURS
+ui.label("Scores").classes(f"{TYPOGRAPHY['section_label']} text-{COLOURS['subtle']}")
+```
+
+### Tailwind Responsive Prefixes
+Tailwind's mobile-first responsive system. A class prefixed with `sm:`, `md:`, `lg:`, or `xl:` only applies at that breakpoint and above. Used in NiceGUI via `.classes()` — no CSS files needed.
+
+```python
+# Stacks vertically on mobile, side-by-side on tablet+
+ui.row().classes("flex-col md:flex-row gap-4")
+
+# Max-width scales up with screen size
+ui.column().classes("w-full max-w-sm md:max-w-2xl lg:max-w-4xl mx-auto")
+```

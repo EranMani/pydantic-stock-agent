@@ -142,5 +142,5 @@ This log is evidence of genuine human-AI collaboration — Eran (engineer) and C
 - Inline colours per component — simple but fragile; a colour change requires touching every file
 - Central `theme.py` with a semantic `COLOURS` dict and `RECOMMENDATION_BADGE` mapping — single source of truth, one file to update
 **Decision:** Central `theme.py`. `COLOURS` maps semantic roles (primary, success, muted, etc.) to Tailwind fragments. `RECOMMENDATION_BADGE` defines the badge classes canonical to the recommendation enum. `apply_theme()` enables dark mode per NiceGUI session. Components import from `theme.py` in future refactors.
-**Outcome:** `src/stock_agent/ui/theme.py` created. `app.py` imports and calls `apply_theme()` on every page load.
+**Outcome:** `src/stock_agent/ui/theme.py` created. `app.py` imports and calls `apply_theme()` on every page load. Subsequently expanded (TASK-004 context) to a full six-dict token system: `COLOURS`, `TYPOGRAPHY`, `SPACING`, `RADIUS`, `SHADOW`, `TRANSITIONS` — matching the token spec in the ui-designer agent.
 
