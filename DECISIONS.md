@@ -155,3 +155,23 @@ This log is evidence of genuine human-AI collaboration — Eran (engineer) and C
 **Decision:** Specialised sub-agents. Starting with `@ui-designer` (owns all NiceGUI/Tailwind frontend work). Future agents planned for backend database work and potentially infrastructure/DevOps. Each agent gets three files: an identity file (`ui-designer.md`), a skill file (`SKILL.md` with execution process per task type), and a live work log (`ui-designer-worklog.md`).
 **Outcome:** `.claude/agents/ui-designer.md`, `.claude/skills/ui-designer/SKILL.md`, and `.claude/agents/logs/ui-designer-worklog.md` added. `CLAUDE.md` Section 6 routes UI/UX work to `@ui-designer`.
 
+---
+
+## DEC-014 — Control panel layout replacing stacked card form (Aria, approved by Eran)
+**Raised by:** Eran — original dashboard felt dull, too vertical, no hierarchy
+**Context:** The Phase 7 dashboard stacked every section in equal-weight cards. The Analyse button was buried at position four. The page read as a form, not a tool.
+**Options considered:**
+- Two-column layout (ticker/action left, strategy config right)
+- Stacked with brutal hierarchy (accordion for strategy, hero ticker)
+- Control panel — single horizontal control bar + collapsible strategy config (Aria's recommendation)
+**Decision:** Control panel layout (Option C). Ticker input, weight slider, and Analyse button live in one card. Strategy config (pill toggles for metrics) collapses inside the same card via `ui.expansion()`. Page widened to `max-w-2xl` with proper card surfaces giving dark `gray-800` backgrounds.
+**Outcome:** `app.py` and `strategy_panel.py` restructured. Checkboxes replaced with pill toggle buttons. `PILL_ACTIVE` / `PILL_INACTIVE` tokens added to `theme.py`.
+
+---
+
+## DEC-015 — `color=None` on NiceGUI buttons to allow Tailwind class control (Aria)
+**Raised by:** Aria during pill toggle debugging
+**Context:** `ui.button()` defaults to `color='primary'` which causes Quasar's scoped CSS to take specificity precedence over Tailwind `bg-*` classes. Visual state changes via `.classes()` were invisible — Quasar was winning the CSS war every time.
+**Decision:** Always set `color=None` on any `ui.button()` where Tailwind classes control the visual appearance. This removes Quasar's color prop entirely and makes Tailwind the sole authority.
+**Outcome:** Applied to all pill toggle buttons and the Analyse button. Pattern to follow for any future button with custom Tailwind styling.
+

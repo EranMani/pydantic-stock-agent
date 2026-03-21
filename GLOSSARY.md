@@ -304,6 +304,34 @@ from stock_agent.ui.theme import TYPOGRAPHY, COLOURS
 ui.label("Scores").classes(f"{TYPOGRAPHY['section_label']} text-{COLOURS['subtle']}")
 ```
 
+### `ui.expansion()` (NiceGUI)
+A collapsible disclosure widget. Renders a header row that toggles the visibility of its child content. Used in `strategy_panel.py` to hide the scoring metric toggles by default, keeping the main dashboard clean.
+```python
+with ui.expansion("Scoring Strategy", icon="tune"):
+    # content hidden until user clicks the header
+    ui.label("shown when expanded")
+```
+Collapsed by default (no `value=True` needed). Equivalent to an HTML `<details>` element but styled with Quasar/Tailwind.
+
+### `color=None` on `ui.button()`
+NiceGUI buttons default to `color='primary'`, which activates Quasar's scoped color CSS. This overrides Tailwind `bg-*` classes at higher specificity — making `.classes("bg-indigo-600")` invisible. Setting `color=None` removes Quasar's color prop entirely, making Tailwind the sole visual authority. Required any time a button uses custom Tailwind color classes.
+```python
+# Wrong — Quasar overrides the bg class
+ui.button("Click").classes("bg-indigo-600 text-white")
+
+# Correct — Tailwind wins
+ui.button("Click", color=None).classes("bg-indigo-600 text-white")
+```
+
+### `_classes.clear()` + `.classes()` + `.update()` pattern
+The correct way to fully replace a NiceGUI element's Tailwind classes at runtime. `.classes(string, replace=True)` passes a bool to a parameter expecting a string, causing `AttributeError`. The safe pattern:
+```python
+btn._classes.clear()        # wipe all existing classes
+btn.classes(NEW_CLASSES)    # apply the full new class string
+btn.update()                # push the change to the browser
+```
+Used in pill toggle handlers to swap between `PILL_ACTIVE` and `PILL_INACTIVE` tokens.
+
 ### Tailwind Responsive Prefixes
 Tailwind's mobile-first responsive system. A class prefixed with `sm:`, `md:`, `lg:`, or `xl:` only applies at that breakpoint and above. Used in NiceGUI via `.classes()` — no CSS files needed.
 
