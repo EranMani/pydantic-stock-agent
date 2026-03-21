@@ -140,6 +140,24 @@ RECOMMENDATION_BADGE: dict[str, str] = {
     "AVOID": "bg-red-100 text-red-800",
 }
 
+# ---------------------------------------------------------------------------
+# Pill button states — metric toggle pills in the strategy panel.
+# Two states only: PILL_ACTIVE (selected metric) and PILL_INACTIVE (unselected).
+# Swapped on toggle via: b._classes.clear(); b.classes(PILL_ACTIVE or PILL_INACTIVE); b.update()
+# Invariant classes (rounded-full, px-3, py-1, text-xs, font-medium, transition,
+# duration-150, cursor-pointer) are repeated in both strings so a full replace is always safe.
+# ---------------------------------------------------------------------------
+PILL_ACTIVE: str = (
+    "rounded-full px-3 py-1 text-xs font-medium "
+    "transition duration-150 cursor-pointer "
+    "bg-indigo-600 text-white"
+)
+PILL_INACTIVE: str = (
+    "rounded-full px-3 py-1 text-xs font-medium "
+    "transition duration-150 cursor-pointer "
+    "bg-gray-700 text-gray-300 hover:bg-gray-600"
+)
+
 
 def apply_theme() -> None:
     """Apply the dark theme to the current NiceGUI page session.

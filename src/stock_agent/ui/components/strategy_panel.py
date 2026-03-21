@@ -1,23 +1,42 @@
-"""ScoringStrategy configuration panel — weight sliders and metric toggles.
+"""ScoringStrategy configuration panel — collapsible metric toggle pills.
 
-Renders a card with:
-  - A single slider controlling the fundamental/technical weight split
-  - Checkboxes for each fundamental metric (pe_ratio, revenue_growth,
-    market_cap, beta) and technical indicator (trend_template, vcp)
+Renders a collapsible ui.expansion("Scoring Strategy") containing two groups of
+pill-toggle buttons:
+  - Fundamental metrics: P/E Ratio, Revenue Growth, Market Cap, Beta
+  - Technical indicators: Trend Template, VCP
 
-Technical weight is always derived as (100 - fundamental_pct),
-guaranteeing the two weights always sum to 1.0 without runtime validation
-on every slider move. Active metrics are stored as sets and converted to
-sorted lists when building a ScoringStrategy.
+The expansion is collapsed by default and lives INSIDE the main control card
+in app.py (below the Analyse button, after a separator). This keeps the entire
+primary action surface in one card — no floating panel below.
+
+Each pill toggles between active (indigo-600) and inactive (gray-700) state.
+Root cause of previous pill toggle failure: ui.button() defaults to
+color='primary', which applies Quasar's scoped CSS and overrides Tailwind bg
+classes. Fix: pass color=None to every pill button so Tailwind classes are the
+sole authority over visual state.
+
+Pill toggle class-swap fix: NiceGUI's .classes() does not accept `replace` as a
+keyword argument in this version — passing replace=True causes AttributeError
+('bool' object has no attribute 'split'). Fix: clear _classes directly via
+b._classes.clear() then call b.classes(NEW_CLASSES) to set the full string.
+This is reliable and avoids class accumulation across multiple toggles.
+
+The weight slider lives in app.py's control card, not here — this panel is
+purely the metric selection layer.
+
+Active metrics are stored as sets inside StrategyState and converted to
+sorted lists when building a ScoringStrategy. The StrategyState class also
+holds fundamental_pct which is mutated by the weight slider in app.py.
 
 Public API:
-  StrategyState  — mutable container holding the current weight + metric config
-  strategy_panel(state) — renders the NiceGUI card and binds it to state
+  StrategyState  — mutable container: weight split + active metric sets
+  strategy_panel(state) — renders collapsible pill toggle groups bound to state
 """
 
 from nicegui import ui
 
 from stock_agent.models.context import ScoringStrategy
+from stock_agent.ui.theme import COLOURS, PILL_ACTIVE, PILL_INACTIVE, SPACING, TYPOGRAPHY
 
 # All available fundamental metrics — keys must match METRIC_WEIGHTS in config.py
 _ALL_FUNDAMENTAL: list[tuple[str, str]] = [
@@ -38,7 +57,8 @@ class StrategyState:
     """Mutable container for the current scoring weight and metric configuration.
 
     Holds fundamental_pct (0–100 integer) and sets of active metric/indicator
-    keys. Call to_scoring_strategy() to produce a validated ScoringStrategy.
+    keys. The weight slider in app.py mutates fundamental_pct directly.
+    Call to_scoring_strategy() to produce a validated ScoringStrategy.
     """
 
     def __init__(self) -> None:
@@ -67,68 +87,94 @@ class StrategyState:
 
 
 def strategy_panel(state: StrategyState) -> None:
-    """Render the scoring strategy configuration card and bind it to state.
+    """Render collapsible metric toggle pill groups bound to state.
 
-    Sections:
-      1. Weight slider — fundamental/technical split (0–100)
-      2. Fundamental metric toggles — checkboxes for each metric
-      3. Technical indicator toggles — checkboxes for each indicator
+    Renders a ui.expansion() that lives INSIDE the main control card in app.py
+    (after a separator, below the Analyse button). No card wrapper inside — the
+    parent card provides the surface. Two pill groups: fundamentals and technicals.
+
+    Pill toggle fix: every ui.button() pill passes color=None to strip Quasar's
+    scoped color CSS, making Tailwind bg classes authoritative. On toggle, classes
+    are swapped by clearing b._classes then calling b.classes(NEW_STRING) — this
+    avoids the AttributeError caused by passing replace=True as a keyword argument
+    (not valid in this NiceGUI version) and prevents class accumulation across
+    multiple toggle cycles.
+
+    Direct button references are captured in closures via default argument binding
+    (b=btn) to avoid the late-binding closure problem across loop iterations.
 
     Uses only NiceGUI Python API — no HTML, CSS, or JavaScript.
     """
-    with ui.card().classes("w-full gap-3"):
-        ui.label("Scoring Strategy").classes("text-base font-semibold")
+    # Expansion collapsed by default (value=False is the NiceGUI default — no param needed).
+    # .classes("w-full") ensures it spans the full column width within the parent card.
+    with ui.expansion("Scoring Strategy", icon="tune").classes("w-full"):
+        with ui.column().classes(f"w-full {SPACING['compact_gap']} pt-2"):
 
-        # --- Weight slider ---
-        ui.label("Weights").classes("text-xs font-semibold text-gray-500 uppercase tracking-wide")
-        with ui.row().classes("w-full items-center gap-4"):
-            ui.label("Fundamental").classes("w-24 text-sm")
-            slider = ui.slider(min=0, max=100, step=1, value=state.fundamental_pct).classes("flex-1")
-            weight_display = ui.label(
-                f"F {state.fundamental_pct}% / T {state.technical_pct}%"
-            ).classes("w-28 text-sm text-right")
+            # --- Fundamental metric pills ---
+            with ui.column().classes(f"w-full {SPACING['tight_gap']}"):
+                ui.label("Fundamentals").classes(
+                    f"{TYPOGRAPHY['section_label']} text-{COLOURS['subtle']}"
+                )
+                with ui.row().classes(f"flex-wrap {SPACING['tight_gap']}"):
+                    for key, label in _ALL_FUNDAMENTAL:
+                        is_active = key in state.active_fundamental
+                        # color=None: removes Quasar's scoped color CSS so Tailwind classes win.
+                        btn = ui.button(label, color=None).classes(
+                            PILL_ACTIVE if is_active else PILL_INACTIVE
+                        )
 
-        def on_weight_change(e) -> None:
-            """Update state and refresh weight display on slider change."""
-            state.fundamental_pct = int(e.value)
-            weight_display.set_text(f"F {state.fundamental_pct}% / T {state.technical_pct}%")
+                        def make_toggle(k: str = key, b: ui.button = btn) -> None:
+                            """Toggle metric key and swap pill visual state."""
+                            def toggle() -> None:
+                                """Handle pill click: update state set and swap classes.
 
-        slider.on_value_change(on_weight_change)
+                                Class-swap via _classes.clear() + .classes(full_string) to avoid
+                                the AttributeError from replace=True (not valid in this NiceGUI
+                                version) and to prevent class accumulation across toggle cycles.
+                                """
+                                if k in state.active_fundamental:
+                                    state.active_fundamental.discard(k)
+                                    b._classes.clear()
+                                    b.classes(PILL_INACTIVE)
+                                else:
+                                    state.active_fundamental.add(k)
+                                    b._classes.clear()
+                                    b.classes(PILL_ACTIVE)
+                                b.update()
+                            return toggle
 
-        ui.separator()
+                        btn.on_click(make_toggle())
 
-        # --- Fundamental metric toggles ---
-        ui.label("Fundamental Metrics").classes("text-xs font-semibold text-gray-500 uppercase tracking-wide")
-        with ui.row().classes("flex-wrap gap-x-6 gap-y-1"):
-            for key, label in _ALL_FUNDAMENTAL:
-                checkbox = ui.checkbox(label, value=key in state.active_fundamental)
+            # --- Technical indicator pills ---
+            with ui.column().classes(f"w-full {SPACING['tight_gap']}"):
+                ui.label("Technicals").classes(
+                    f"{TYPOGRAPHY['section_label']} text-{COLOURS['subtle']}"
+                )
+                with ui.row().classes(f"flex-wrap {SPACING['tight_gap']}"):
+                    for key, label in _ALL_TECHNICAL:
+                        is_active = key in state.active_technical
+                        # Same color=None fix applied to technical pills.
+                        btn = ui.button(label, color=None).classes(
+                            PILL_ACTIVE if is_active else PILL_INACTIVE
+                        )
 
-                def make_fundamental_handler(k: str):
-                    def handler(e) -> None:
-                        """Toggle a fundamental metric in the active set."""
-                        if e.value:
-                            state.active_fundamental.add(k)
-                        else:
-                            state.active_fundamental.discard(k)
-                    return handler
+                        def make_tech_toggle(k: str = key, b: ui.button = btn) -> None:
+                            """Toggle indicator key and swap pill visual state."""
+                            def toggle() -> None:
+                                """Handle pill click: update state set and swap classes.
 
-                checkbox.on_value_change(make_fundamental_handler(key))
+                                Same _classes.clear() pattern as fundamental pills — avoids
+                                AttributeError from replace=True keyword argument.
+                                """
+                                if k in state.active_technical:
+                                    state.active_technical.discard(k)
+                                    b._classes.clear()
+                                    b.classes(PILL_INACTIVE)
+                                else:
+                                    state.active_technical.add(k)
+                                    b._classes.clear()
+                                    b.classes(PILL_ACTIVE)
+                                b.update()
+                            return toggle
 
-        ui.separator()
-
-        # --- Technical indicator toggles ---
-        ui.label("Technical Indicators").classes("text-xs font-semibold text-gray-500 uppercase tracking-wide")
-        with ui.row().classes("flex-wrap gap-x-6 gap-y-1"):
-            for key, label in _ALL_TECHNICAL:
-                checkbox = ui.checkbox(label, value=key in state.active_technical)
-
-                def make_technical_handler(k: str):
-                    def handler(e) -> None:
-                        """Toggle a technical indicator in the active set."""
-                        if e.value:
-                            state.active_technical.add(k)
-                        else:
-                            state.active_technical.discard(k)
-                    return handler
-
-                checkbox.on_value_change(make_technical_handler(key))
+                        btn.on_click(make_tech_toggle())
