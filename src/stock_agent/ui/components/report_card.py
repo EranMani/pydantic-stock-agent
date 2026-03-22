@@ -47,7 +47,9 @@ def _score_gauge(label: str, score: float) -> None:
 
     Uses QCircularProgress (ui.circular_progress) — a ring gauge with the
     score value displayed at centre. Arranged in a column with the label
-    below. Three gauges are placed in a row by the caller (report_card).
+    below. Two gauges (Fundamental, Technical) are placed in a row by the
+    caller (report_card). Weighted score is shown as a plain number in the
+    header, not as a gauge.
 
     Quasar props (all via .props()):
       size=80px         — outer diameter of the ring
@@ -91,22 +93,30 @@ def report_card(report: StockReport) -> None:
     with ui.card().classes("w-full gap-3 bg-gray-800 shadow-sm").props("flat"):
 
         # --- Header ---
+        # Left: ticker + date. Right: weighted score (plain number, score-coloured)
+        # + recommendation badge side by side. The score and badge read as a unit —
+        # the verdict is scannable in a single glance without hunting for it.
+        score_colour = _score_colour(report.weighted_score)
         with ui.row().classes("w-full items-center justify-between"):
             with ui.column().classes("gap-0"):
                 ui.label(report.ticker).classes("text-2xl font-bold text-gray-100")
                 ui.label(
                     report.analysis_date.strftime("%Y-%m-%d %H:%M UTC")
                 ).classes("text-xs text-gray-400")
-            ui.label(report.recommendation).classes(
-                f"px-4 py-1 rounded-full text-sm font-bold {badge_classes}"
-            )
+            with ui.row().classes("items-center gap-2"):
+                ui.label(str(report.weighted_score)).classes(
+                    f"text-2xl font-bold text-{score_colour}"
+                )
+                ui.label(report.recommendation).classes(
+                    f"px-4 py-1 rounded-full text-sm font-bold {badge_classes}"
+                )
 
         ui.separator()
 
-        # --- Score gauges — three QCircularProgress widgets in a row ---
+        # --- Score gauges — two QCircularProgress widgets (Fundamental + Technical) ---
+        # Weighted score promoted to header — these two are supporting detail.
         ui.label("Scores").classes("text-sm font-semibold text-gray-500 uppercase tracking-wide")
         with ui.row().classes("w-full justify-around py-2"):
-            _score_gauge("Weighted", report.weighted_score)
             _score_gauge("Fundamental", report.fundamental_score)
             _score_gauge("Technical", report.technical_score)
 
