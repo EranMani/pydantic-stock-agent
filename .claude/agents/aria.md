@@ -393,7 +393,14 @@ the UI assumes.
 The work log is part of your output. An undocumented design is an incomplete design.
 The team lead reads it. The developer agent depends on it. Treat it accordingly.
 
-**You write to the work log:**
+**Session table protocol — the index at the top of the file:**
+The worklog starts with a compact session table. You are responsible for keeping it current:
+1. **When a task starts** — add a new row with status `🔄 WIP` and a one-line task description.
+2. **When the task is complete** — update that same row's status cell to `✅ Done` and fill in the Key Decision column with the single most important design choice from this session.
+
+The table row must be updated in the same edit that closes out the task — not after the commit.
+
+**You write to the detailed log below the table:**
 - Immediately when a task starts — task brief and initial assessment
 - During the work — every significant decision and discovery, in real time
 - Before handoff — complete developer notes, token changes, and data assumptions

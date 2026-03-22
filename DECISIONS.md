@@ -177,13 +177,23 @@ This log is evidence of genuine human-AI collaboration — Eran (engineer) and C
 
 ---
 
-## DEC-019 — `KeyPoint` model with sentiment over two flat lists for analyst observations
-**Raised by:** Eran during report card review — wanted colored bullets distinguishing good vs bad news
+## DEC-016 — Fixed full-bleed toolbar with height contract (Aria)
+**Raised by:** Eran — page felt unmodern, title was floating with no visual anchor
+**Context:** The "Stock Agent" title and subtitle were bare labels inside the content column — no background, no frame, no hierarchy. The page had no architectural top edge.
+**Decision:** Full-bleed fixed toolbar, `gray-900` background, `h-14` (56px), with a 1px `indigo-600` bottom border accent. Brand name left, live status dot right. Inner content constrained to `max-w-2xl` to align with the body column. Body content column carries `pt-14` offset to clear the fixed header. Height contract: `h-14` and `pt-14` are coupled — both must change together if the header height ever changes.
+**Outcome:** `app_header()` function added to `app.py`. `HEADER` token dict added to `theme.py` centralizing all header constants. Header background deliberately `gray-900` (not indigo) to avoid competing with the `indigo-600` primary action color.
+
+---
+
+## DEC-017 — Enforce score rounding at the Pydantic model level via a `Score` type alias
+**Raised by:** Eran — score fields were returning floats with many decimal places
+**Context:** The scoring pipeline produces raw floats (e.g. `7.134285714...`). These values flow into `FundamentalData`, `TechnicalData`, `PeerReport`, and `StockReport`. The question was where to enforce the 1-decimal rounding.
 **Options considered:**
-- Two flat lists (`positive_points: list[str]`, `negative_points: list[str]`) — simple for the LLM, but forces every observation to be binary; no neutral factual context allowed
-- `KeyPoint(text, sentiment)` model — one field, structured data; LLM classifies each point; neutral observations handled naturally; Aria renders bullet colour from `.sentiment`
-**Decision:** `KeyPoint` model (Option B). The schema gives the LLM a clear contract, handles neutrals gracefully, and keeps `key_points` as a single field rather than splitting the analyst output across two. Aria maps `sentiment` to emerald/rose/gray bullet dots at render time.
-**Outcome:** `KeyPoint` added to `report.py`. `StockReport.key_points` changed from `list[str]` to `list[KeyPoint]`. System prompt updated with sentiment classification guidance.
+- Round in the display layer (report card, MCP tool formatters) — each consumer must remember to round; easy to forget
+- Round inside each scorer function (`calculate_fundamental_score`, etc.) — couples a presentation concern to business logic
+- `Score` type alias with `AfterValidator(lambda v: round(v, 1))` on every score field — rounding is guaranteed at model construction time, enforced by Pydantic, invisible to callers
+**Decision:** `Score` type alias at the model level. One definition in `report.py`, applied to all six score fields across the four models. The pipeline and scorers produce any precision they like — the model always stores exactly one decimal place. No display layer or scorer needs to know about it.
+**Outcome:** `Score = Annotated[float, AfterValidator(lambda v: round(v, 1))]` added to `report.py`. Applied to `FundamentalData.score`, `TechnicalData.score`, `PeerReport.weighted_score`, and `StockReport.fundamental_score / technical_score / weighted_score`.
 
 ---
 
@@ -205,21 +215,11 @@ This log is evidence of genuine human-AI collaboration — Eran (engineer) and C
 
 ---
 
-## DEC-017 — Enforce score rounding at the Pydantic model level via a `Score` type alias
-**Raised by:** Eran — score fields were returning floats with many decimal places
-**Context:** The scoring pipeline produces raw floats (e.g. `7.134285714...`). These values flow into `FundamentalData`, `TechnicalData`, `PeerReport`, and `StockReport`. The question was where to enforce the 1-decimal rounding.
+## DEC-019 — `KeyPoint` model with sentiment over two flat lists for analyst observations
+**Raised by:** Eran during report card review — wanted colored bullets distinguishing good vs bad news
 **Options considered:**
-- Round in the display layer (report card, MCP tool formatters) — each consumer must remember to round; easy to forget
-- Round inside each scorer function (`calculate_fundamental_score`, etc.) — couples a presentation concern to business logic
-- `Score` type alias with `AfterValidator(lambda v: round(v, 1))` on every score field — rounding is guaranteed at model construction time, enforced by Pydantic, invisible to callers
-**Decision:** `Score` type alias at the model level. One definition in `report.py`, applied to all six score fields across the four models. The pipeline and scorers produce any precision they like — the model always stores exactly one decimal place. No display layer or scorer needs to know about it.
-**Outcome:** `Score = Annotated[float, AfterValidator(lambda v: round(v, 1))]` added to `report.py`. Applied to `FundamentalData.score`, `TechnicalData.score`, `PeerReport.weighted_score`, and `StockReport.fundamental_score / technical_score / weighted_score`.
-
----
-
-## DEC-016 — Fixed full-bleed toolbar with height contract (Aria)
-**Raised by:** Eran — page felt unmodern, title was floating with no visual anchor
-**Context:** The "Stock Agent" title and subtitle were bare labels inside the content column — no background, no frame, no hierarchy. The page had no architectural top edge.
-**Decision:** Full-bleed fixed toolbar, `gray-900` background, `h-14` (56px), with a 1px `indigo-600` bottom border accent. Brand name left, live status dot right. Inner content constrained to `max-w-2xl` to align with the body column. Body content column carries `pt-14` offset to clear the fixed header. Height contract: `h-14` and `pt-14` are coupled — both must change together if the header height ever changes.
-**Outcome:** `app_header()` function added to `app.py`. `HEADER` token dict added to `theme.py` centralizing all header constants. Header background deliberately `gray-900` (not indigo) to avoid competing with the `indigo-600` primary action color.
+- Two flat lists (`positive_points: list[str]`, `negative_points: list[str]`) — simple for the LLM, but forces every observation to be binary; no neutral factual context allowed
+- `KeyPoint(text, sentiment)` model — one field, structured data; LLM classifies each point; neutral observations handled naturally; Aria renders bullet colour from `.sentiment`
+**Decision:** `KeyPoint` model (Option B). The schema gives the LLM a clear contract, handles neutrals gracefully, and keeps `key_points` as a single field rather than splitting the analyst output across two. Aria maps `sentiment` to emerald/rose/gray bullet dots at render time.
+**Outcome:** `KeyPoint` added to `report.py`. `StockReport.key_points` changed from `list[str]` to `list[KeyPoint]`. System prompt updated with sentiment classification guidance.
 

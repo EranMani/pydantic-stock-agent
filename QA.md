@@ -4,6 +4,48 @@ Running record of design and concept questions discussed during development.
 
 ---
 
+## Question Index
+
+| # | Question (short) | Phase / Topic |
+|---|---|---|
+| 1 | Why no `ge=0.0` on `pe_ratio`, `revenue_growth`, `beta`? | Core Schemas |
+| 2 | Can beta be negative? What does negative beta mean? | Core Schemas |
+| 3 | If beta is 2, does the stock go down 2x? | Core Schemas |
+| 4 | Why is `AgentDependencies` a dataclass holding `ScoringStrategy`? | Architecture |
+| 5 | Why not pass fundamental data in the agent context? | Architecture |
+| 6 | Why should agent tools be thin? Why delegate calculations to utils? | Architecture |
+| 7 | Why add `Field(description=...)` to every Pydantic model field? | Architecture |
+| 8 | Why use `BaseSettings` over a plain settings class? | Configuration |
+| 9 | What can `SettingsConfigDict` be used for beyond `.env`? | Configuration |
+| 10 | Risk of blocking calls inside `async def`; how `asyncio.to_thread()` solves it | Async/Threading |
+| 11 | How does OHLCV data cleaning work and why is it critical? | Technical Data |
+| 12 | Why drop tvdatafeed and use yfinance for OHLCV? | Technical Data |
+| 13 | What about scraping TradingView charts with a vision model? | Technical Data |
+| 14 | How do we get the full company name from a ticker symbol? | Fundamental Pipeline |
+| 15 | How do we ensure news search returns relevant catalysts, not generic coverage? | Fundamental Pipeline |
+| 16 | Is `extract_risk_flags()` a guardrails system? Does Celery call it directly? | Fundamental Pipeline |
+| 17 | When to enforce rules in Python vs. rely on LLM reasoning? | Fundamental Pipeline |
+| 18 | How does the fundamental scoring algorithm work? | Fundamental Pipeline |
+| 19 | Where does the 50% weight come from? What do `1` and `9` mean in the scaling formula? | Fundamental Pipeline |
+| 20 | What happens when yfinance returns an empty industry peers list? | Fundamental Pipeline |
+| 21 | Why is `_fetch_history` decorated with `@lru_cache`? | Technical Pipeline |
+| 22 | What is `cachetools.TTLCache` and when to use it instead of `lru_cache`? | Technical Pipeline |
+| 23 | Where does `price_above_mas` get its SMA data? Does it make a separate fetch? | Technical Pipeline |
+| 24 | What does `price_above_mas` check and why does it matter? | Technical Pipeline |
+| 25 | What are the five Minervini Trend Template conditions and why must every one pass? | Technical Pipeline |
+| 26 | What is the VCP and how does `detect_vcp` measure it? | Technical Pipeline |
+| 27 | Why does `get_moving_average_signal` exist as a separate tool? | Agent Tools |
+| 28 | How does PydanticAI tool registration work? What does `@agent.tool` do? | Agent Tools |
+| 29 | Why are tool modules imported at the bottom of `agent.py`? | Agent Tools |
+| 30 | Why is the Ollama sub-agent lazy-initialised with `@lru_cache`? | Agent Tools |
+| 31 | Why does pydantic-ai connect to Ollama via `OpenAIProvider`? | Agent Tools |
+| 32 | How do you test a PydanticAI agent without a real API key? | Testing |
+| 33 | What should the frontend display when `pe_ratio` is `None`? | UI |
+| 34 | Why is `main.py` inside `src/stock_agent/` instead of the project root? | Project Structure |
+| 35 | Is there a size limit on `CLAUDE.md`? When should it be split? | Project Structure |
+
+---
+
 ## Phase 1 — Core Schemas
 
 ### Q: Why does `FundamentalData` not apply `ge=0.0` to `pe_ratio`, `revenue_growth`, and `beta`?

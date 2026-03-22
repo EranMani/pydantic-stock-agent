@@ -31,7 +31,14 @@ The agent maintains a live work log at `.claude/agents/logs/ui-designer-worklog.
 This log is written to CONTINUOUSLY during work — not summarized at the end.
 It is how the team lead tracks progress and how the developer agent receives handoffs.
 
-Writing protocol:
+**Session table protocol — the index at the top of the worklog:**
+The worklog starts with a compact session table. Keep it current:
+1. **When a task starts** — add a new row with status `🔄 WIP` and a one-line task description.
+2. **When the task is complete** — update that row's status to `✅ Done` and fill the Key Decision column with the single most important design choice made.
+
+Update the table row in the same edit that closes out the task — not after the commit.
+
+**Detailed log writing protocol:**
 1. Open a new task block at the START of every task — fill in Task Brief immediately
 2. Update "Work In Progress" after every meaningful step — in real time, not from memory
 3. Log every design decision in "Design Decisions Log" as it is made

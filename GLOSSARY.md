@@ -1,6 +1,70 @@
 # Project Glossary
 
-Quick reference for financial concepts, pandas functions, async/Python terms, and project-specific vocabulary used throughout this codebase.
+Quick reference for financial concepts, pandas functions, async/Python terms, and project-specific vocabulary.
+
+---
+
+## Quick Reference
+
+| Term | Category | Summary |
+|---|---|---|
+| `pd.DataFrame()` | Pandas | Two-dimensional tabular data structure — the core container for OHLCV price data |
+| `df.loc[]` / `df.iloc[]` | Pandas | Label-based vs. integer-position indexing |
+| `df.ffill()` / `df.bfill()` | Pandas | Forward/backward fill — NaN gap cleaning; used together as the standard clean chain |
+| `df.isna()` | Pandas | Returns boolean mask of NaN positions — used in validation checks |
+| `df.drop(columns=[])` | Pandas | Remove columns; returns new DataFrame |
+| `df.tail(n)` / `df.head(n)` | Pandas | Last / first N rows |
+| `df.shape` | Pandas | `(rows, columns)` tuple |
+| `np.nan` | NumPy | Standard missing value marker; recognized by all pandas NaN functions |
+| OHLCV | Finance | Open, High, Low, Close, Volume — the five standard daily price bar fields |
+| P/E Ratio | Finance | Price ÷ EPS; lower = better value; `None` for loss-making companies |
+| Beta | Finance | Market sensitivity: >1 amplified, <1 dampened, <0 inverse |
+| Revenue Growth | Finance | YoY revenue change as decimal (0.15 = 15%); can be negative |
+| Market Cap | Finance | Share Price × Shares Outstanding; always non-negative |
+| SMA | Finance | Simple Moving Average — 50/150/200-day used for trend direction |
+| MACD | Finance | Momentum indicator: 12-day EMA minus 26-day EMA, with signal and histogram |
+| 52-Week High/Low | Finance | Highest/lowest close over 252 trading days; used in Trend Template |
+| Minervini Trend Template | Finance | 5-condition checklist for stocks in a strong uptrend (price > MAs, 200d rising, etc.) |
+| VCP | Finance | Volatility Contraction Pattern — successive narrowing price ranges before a breakout |
+| Weighted Score | Finance | `(fundamental_score × fw) + (technical_score × tw)` — the agent's final combined score |
+| `KeyPoint` | Project Model | Pydantic model: `text` (observation) + `sentiment` (positive/negative/neutral) |
+| `ScoringStrategy` | Project Model | Config model controlling which metrics are active and their relative weights |
+| `AgentDependencies` | Project Model | Dataclass dependency injection container; carries `ScoringStrategy` via `ctx.deps` |
+| Sub-score | Project Term | Normalized `[0.0, 1.0]` float for a single metric before weighting |
+| Re-normalisation | Project Term | Re-scaling active metric weights to sum to 1.0 when metrics are excluded |
+| Context Window | Project Term | Max tokens an LLM can process in one call — keep lean and signal-rich |
+| Context Engineering | Project Term | Deterministically filtering/structuring data before it reaches the LLM |
+| `RISK_KEYWORDS` | Project Term | Module-level list used by `extract_risk_flags()` to filter non-risk snippets |
+| `@agent.tool` | PydanticAI | Decorator registering an `async def` as a callable tool; builds JSON schema from params |
+| `RunContext[T]` | PydanticAI | DI context in every tool; `ctx.deps` carries `AgentDependencies` |
+| `TestModel` | PydanticAI | Test double that never makes HTTP calls; used for agent wiring tests |
+| `Annotated[T, ...]` | Pydantic v2 | Attaches metadata (validators, constraints) to a type without changing it |
+| `AfterValidator` | Pydantic v2 | Post-coercion hook — receives already-validated value, returns transformed value |
+| `Score` type alias | Pydantic v2 | `Annotated[float, AfterValidator(lambda v: round(v, 1))]` — 1-decimal rounding at model level |
+| Event Loop | Async | Single-threaded asyncio scheduler; blocking calls freeze it entirely |
+| Coroutine (`async def`) | Async | Function pauseable at `await` points; must be awaited or run with `asyncio.run()` |
+| `asyncio.to_thread()` | Async | Runs a blocking function in a thread pool, freeing the event loop |
+| `asyncio.gather()` | Async | Runs multiple coroutines concurrently; returns results in input order |
+| `asyncio.run()` | Async | Sync-to-async bridge — creates an event loop; used in Celery task bodies |
+| Lazy Initialisation | Python | Defer object creation to first call via `@lru_cache`; avoids startup failures |
+| Lazy Import | Python | Import inside a function body to break circular imports at module load time |
+| Heavy vs Lightweight Tool | Design | Heavy: runs full pipeline once. Lightweight: returns a specific subset cheaply on demand |
+| OpenAI-Compatible API | Ollama | Endpoint contract at `{OLLAMA_HOST}/v1` — lets pydantic-ai's `OpenAIModel` talk to Ollama |
+| Closure Variable Capture | Python | Loop variable captured by reference in lambdas — use factory function to create new scope |
+| Reactive Binding | NiceGUI | `.bind_value(obj, 'attr')` links UI ↔ Python variable for automatic sync |
+| `ffill().bfill()` chain | Pattern | Standard NaN-cleaning chain before any indicator module receives the DataFrame |
+| Design Token System | UI | Named constants in `theme.py` mapping semantic names to Tailwind class strings |
+| `ui.expansion()` | NiceGUI | Collapsible disclosure widget — used for the Scoring Strategy panel |
+| `HEADER` token | UI | Dict in `theme.py` holding the height contract for the fixed toolbar (h-14 ↔ pt-14) |
+| `color=None` on `ui.button()` | NiceGUI | Removes Quasar's scoped color CSS so Tailwind `bg-*` classes win |
+| `_classes.clear()` pattern | NiceGUI | Wipe + re-apply + `.update()` — safe way to fully replace element Tailwind classes at runtime |
+| `ui.circular_progress()` | NiceGUI | QCircularProgress ring gauge for score dials |
+| `e.args` vs `e.value` | NiceGUI | `update:selected` on `ui.chip` delivers payload via `e.args`; `e.value` only on `ValueChangeEventArguments` |
+| `ui.chip(selectable=True)` | NiceGUI | QChip toggle; `update:selected` fires with boolean in `e.args`; Quasar manages visual state |
+| `ui.table()` + `add_slot()` | NiceGUI | QTable with Vue template slot injection for custom cell rendering |
+| `q-banner` | NiceGUI | Structured error strip via `ui.element("q-banner")` — semantic, icon-afforded |
+| `q-skeleton` | NiceGUI | Shimmer loading placeholder — mirrors real content geometry to prevent layout shift |
+| Tailwind Responsive Prefixes | UI | `sm:` `md:` `lg:` — mobile-first breakpoints applied via `.classes()` in NiceGUI |
 
 ---
 
