@@ -264,6 +264,17 @@ result = await asyncio.to_thread(
 
 ## Changelog
 
+### v0.3.1 — 2026-03-22
+
+**Bug fix — `get_current_step` returning Step 1 after many non-protocol commits**
+
+#### Fixed
+- Increased `git log --oneline` limit from `-30` to `-200` in `get_current_step`. As non-protocol commits (bug fixes, Aria's UI work, doc updates) accumulated, the 30-commit window no longer reached back far enough to find the last completed protocol step — causing the tool to report Step 1 / 0 completed incorrectly. `-200` gives headroom for the full 62-step build plus a generous buffer of non-protocol commits.
+
+> Note: the fix takes effect on the next Claude Code session restart — the MCP server is a long-running subprocess that loads once at startup.
+
+---
+
 ### v0.3.0 — 2026-03-20
 
 **New tool — `score_ticker`: deterministic weighted scoring without LLM (TASK-002)**

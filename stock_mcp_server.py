@@ -81,7 +81,7 @@ async def get_current_step() -> str:
     # (see module docstring — Issue 1).
     git_result = await asyncio.to_thread(
         subprocess.run,
-        ["git", "log", "--oneline", "-30"],
+        ["git", "log", "--oneline", "-200"],
         cwd=_REPO_ROOT,
         capture_output=True,
         text=True,
