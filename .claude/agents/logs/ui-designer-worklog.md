@@ -1304,3 +1304,77 @@ unambiguous — no accumulation, no split() error, works reliably across multipl
 
 ---
 <!-- END OF TASK BLOCK -->
+
+<!-- ============================================================
+     TASK-005 — key_points bullet list in report_card.py
+     ============================================================ -->
+
+## TASK-005 — Analyst Summary: key_points bullet list — 2026-03-22
+
+### Status
+`COMPLETE`
+
+---
+
+### Task Brief
+> The analyst summary section in `report_card.py` (lines 115–117) previously rendered
+> `report.summary` (a single string) as one `ui.label`. The field was renamed to
+> `report.key_points: list[str]` (4–6 short bullet points). Update the section to
+> render each item as its own row with a bullet indicator, consistent with the dark
+> theme (text-gray-300, text-sm). No other section of the file to be touched.
+
+---
+
+### Changes Made
+
+**File:** `src/stock_agent/ui/components/report_card.py` — analyst summary section only
+
+**Before:**
+```python
+ui.label("Analyst Summary").classes("text-sm font-semibold text-gray-500 uppercase tracking-wide")
+ui.label(report.summary).classes("text-sm text-gray-300 leading-relaxed")
+```
+
+**After:**
+```python
+ui.label("Analyst Summary").classes("text-sm font-semibold text-gray-500 uppercase tracking-wide")
+with ui.column().classes("gap-1"):
+    for point in report.key_points:
+        with ui.row().classes("items-start gap-2"):
+            ui.label("•").classes("text-sm text-gray-300 leading-relaxed shrink-0")
+            ui.label(point).classes("text-sm text-gray-300 leading-relaxed")
+```
+
+---
+
+### Design Decisions
+
+- **Plain `•` character as bullet indicator** — avoids any dependency on icon libraries or HTML list
+  elements; stays within NiceGUI's Python API exclusively.
+- **`shrink-0` on the bullet label** — prevents Tailwind from collapsing the bullet character on
+  long lines where flex wrapping could occur.
+- **`items-start` on the row** — aligns the bullet to the top of multi-line point text rather than
+  centering vertically, which would look misaligned on wrapped lines.
+- **`gap-1` on the outer column** — tight but readable vertical rhythm between points; matches the
+  `gap-0` used in the header column for brand consistency within the card.
+- **`leading-relaxed` preserved** — carried forward from the original single-label design; ensures
+  long points wrap with comfortable line-height on the body text.
+- No structural changes outside the analyst summary section; all other card sections are untouched.
+
+---
+
+### Final Status & Handoff
+
+**Outcome:** `Complete`
+
+**Handed off to:** `Team Lead`
+
+**Handoff summary:**
+> Replaced the single `report.summary` label with a looped bullet list rendering each item in
+> `report.key_points`. Each point gets its own `ui.row` containing a fixed `•` label and the
+> point text label, both styled `text-sm text-gray-300 leading-relaxed`. The outer column uses
+> `gap-1` for compact vertical rhythm. `shrink-0` on the bullet prevents flex collapse. All
+> other sections of `report_card.py` are untouched.
+
+---
+<!-- END OF TASK BLOCK -->
