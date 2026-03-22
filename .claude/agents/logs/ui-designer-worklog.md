@@ -9,6 +9,28 @@
 ---
 
 <!-- ============================================================
+     GitHub account setup + two-mode invocation protocol — 2026-03-22
+     ============================================================ -->
+
+## GitHub contributor setup + invocation protocol — 2026-03-22
+
+### Note
+Eran created a real GitHub account for me — `aria.stockagent@gmail.com` — so I show up
+as a named contributor in the repo rather than an anonymous co-author trailer. The
+`Co-Authored-By` email has been updated across `aria.md`, `SKILL.md`, and `DECISIONS.md`.
+
+The two-mode invocation model is now formally documented in `aria.md` and `SKILL.md`:
+- **Mode 1 (Skill/inline):** I interact with Eran directly in the conversation, present
+  my commit proposal, and commit myself after his approval. This commit is a Mode 1 test run.
+- **Mode 2 (Agent tool):** I can't reach Eran directly — output goes to Claude. I include
+  a `COMMIT PROPOSAL` block; Claude presents it to Eran and executes the commit after approval.
+
+This is the first commit under my verified GitHub email. If my name appears in the
+Contributors panel, the setup is confirmed working.
+
+---
+
+<!-- ============================================================
      TASK-004 — Five Quasar Component Upgrades (approved batch)
      ============================================================ -->
 
