@@ -153,11 +153,17 @@ pydantic-stock-agent/
 ## Section 6 — Agents
 
 Specialised sub-agents own specific domains. Delegate work to them accordingly.
+Full agent architecture, invocation modes, file map, and domain ownership: see `AGENTS.md`.
 
 - **UI/UX work** → delegate to `@aria` agent
   - Covers: components, layouts, design tokens, responsive, accessibility, UX flows, visual critique
   - Work log: `.claude/agents/logs/ui-designer-worklog.md`
   - Skill: `.claude/skills/ui-designer/SKILL.md`
+
+- **Backend infrastructure** → delegate to `@rex` agent
+  - Covers: SQLAlchemy ORM, Alembic migrations, Celery tasks, Redis state, CRUD operations, db/worker tests
+  - Work log: `.claude/agents/logs/backend-worklog.md`
+  - Skill: `.claude/skills/backend/SKILL.md`
 
 ---
 
