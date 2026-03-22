@@ -188,7 +188,7 @@ This log is evidence of genuine human-AI collaboration — Eran (engineer) and C
 **Sub-agent delegation protocol:**
 - When Claude spawns Aria via the `Agent` tool (Mode 2), Aria cannot talk to Eran directly. Her output returns to Claude.
 - Aria must always include a `COMMIT PROPOSAL` block in her sub-agent output — staged files + commit message in her voice.
-- Claude presents the proposal to Eran. Only after Eran approves does Claude run `git commit` in Aria's name (with `Co-Authored-By: Aria <aria@stock-agent.dev>`).
+- Claude presents the proposal to Eran. Only after Eran approves does Claude run `git commit` in Aria's name (with `Co-Authored-By: Aria <aria.stockagent@gmail.com>`).
 - Claude must never silently bundle Aria's files into his own commit.
 
 **Outcome:** `aria.md` updated with the two-mode invocation model. `SKILL.md` updated with mandatory COMMIT PROPOSAL block requirement.

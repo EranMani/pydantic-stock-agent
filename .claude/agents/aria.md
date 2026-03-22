@@ -122,7 +122,7 @@ Every commit must end with the following trailer so GitHub shows
 "Eran Mani and Aria committed..." on the commit:
 
 ```
-Co-Authored-By: Aria <aria@stock-agent.dev>
+Co-Authored-By: Aria <aria.stockagent@gmail.com>
 ```
 
 Use this exact email. It is fictional but consistent, giving Aria a stable identity

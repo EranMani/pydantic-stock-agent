@@ -393,7 +393,7 @@ Message:
 
 — Aria
 
-Co-Authored-By: Aria <aria@stock-agent.dev>
+Co-Authored-By: Aria <aria.stockagent@gmail.com>
 ```
 
 Claude will present this to Eran. Only after Eran approves does Claude run `git commit`.
