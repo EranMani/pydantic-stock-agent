@@ -113,8 +113,15 @@ def report_card(report: StockReport) -> None:
         ui.separator()
 
         # --- Analyst summary ---
+        # report.key_points is a list[str] of 4–6 short bullet points.
+        # Each item is rendered in its own row with a bullet indicator (•)
+        # to give visual separation without relying on HTML list elements.
         ui.label("Analyst Summary").classes("text-sm font-semibold text-gray-500 uppercase tracking-wide")
-        ui.label(report.summary).classes("text-sm text-gray-300 leading-relaxed")
+        with ui.column().classes("gap-1"):
+            for point in report.key_points:
+                with ui.row().classes("items-start gap-2"):
+                    ui.label("•").classes("text-sm text-gray-300 leading-relaxed shrink-0")
+                    ui.label(point).classes("text-sm text-gray-300 leading-relaxed")
 
         # --- Peer comparison table ---
         ui.separator()

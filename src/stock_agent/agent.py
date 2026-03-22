@@ -49,9 +49,11 @@ STRICT RULES — violations invalidate the analysis:
    - weighted_score >= 7.0  → "BUY"
    - weighted_score >= 4.0  → "WATCH"
    - weighted_score <  4.0  → "AVOID"
-5. The summary field must explain the key drivers behind the recommendation in
-   plain language suitable for a retail investor. Reference specific values
-   (e.g. VCP detected, P/E ratio, trend template result) — do not be generic.
+5. The key_points field must contain 4–6 short, specific bullet points explaining
+   the key drivers behind the recommendation. Each point must reference a concrete
+   data value (e.g. "VCP detected", "P/E ratio of 18.2", "Trend Template PASS",
+   "revenue growth of +42%"). Do not write generic statements — every point must
+   be grounded in a specific number or signal from the tool results.
 """
 
 
@@ -128,7 +130,7 @@ async def run_analysis(ticker: str, strategy: ScoringStrategy) -> StockReport:
         f"5. Compute weighted_score = (fundamental_score × {strategy.fundamental_weight}) "
         f"+ (technical_score × {strategy.technical_weight}).\n"
         f"6. Apply the recommendation thresholds from the system prompt.\n"
-        f"7. Write a specific, data-driven summary referencing the key signals.\n"
+        f"7. Write 4–6 specific, data-driven key_points — each one referencing a concrete signal or value.\n"
         f"8. Produce the final StockReport."
     )
 

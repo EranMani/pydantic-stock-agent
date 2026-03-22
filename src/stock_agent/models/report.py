@@ -116,8 +116,12 @@ class StockReport(BaseModel):
     weighted_score: Score = Field(
         description="Final score combining fundamental and technical scores using ScoringStrategy weights. Range [1.0, 10.0].",
     )
-    summary: str = Field(
-        description="Concise analyst narrative summarising the key drivers behind the recommendation.",
+    key_points: list[str] = Field(
+        description=(
+            "4–6 concise bullet points explaining the key drivers behind the recommendation. "
+            "Each point must reference a specific data value (e.g. 'VCP detected', "
+            "'P/E ratio of 18.2', 'Trend Template PASS'). No generic statements."
+        ),
     )
     recommendation: Literal["BUY", "WATCH", "AVOID"] = Field(
         description="Final recommendation: BUY (strong setup), WATCH (monitor for entry), AVOID (unfavourable conditions).",

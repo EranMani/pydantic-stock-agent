@@ -17,6 +17,15 @@ decisions, code review, and iterative improvement made in collaboration with Cla
 
 ### Output & Reporting
 
+- [~] **TASK-006** — Replace `summary: str` with `key_points: list[str]` in `StockReport` for structured analyst output
+  **Raised by:** Eran after observing the analyst summary renders as one unreadable paragraph
+  **Context:** The LLM produces a free-form narrative string with no structural guidance. The UI has no way to break it up meaningfully. Changing the field to a list gives the LLM a clear schema contract and makes rendering trivial.
+  **Approach:** Option A — model field change + system prompt update + UI re-render via Aria.
+  **Acceptance criteria:**
+  - `StockReport.summary` renamed to `key_points: list[str]` with `Field(description=...)`
+  - Agent system prompt updated to instruct the LLM to produce 4–6 concise bullet points
+  - `report_card.py` updated by Aria to render the list as bullet points
+
 - [ ] **TASK-001** — Add `catalysts`, `risk_flags`, and `news_summary` fields to `StockReport`
   **Raised by:** Eran during Step 28 CLI testing (live ONDS run)
   **Context:** Eran noticed that while the `summarize_news_and_extract_risks` tool is called
