@@ -177,6 +177,16 @@ This log is evidence of genuine human-AI collaboration — Eran (engineer) and C
 
 ---
 
+## DEC-019 — `KeyPoint` model with sentiment over two flat lists for analyst observations
+**Raised by:** Eran during report card review — wanted colored bullets distinguishing good vs bad news
+**Options considered:**
+- Two flat lists (`positive_points: list[str]`, `negative_points: list[str]`) — simple for the LLM, but forces every observation to be binary; no neutral factual context allowed
+- `KeyPoint(text, sentiment)` model — one field, structured data; LLM classifies each point; neutral observations handled naturally; Aria renders bullet colour from `.sentiment`
+**Decision:** `KeyPoint` model (Option B). The schema gives the LLM a clear contract, handles neutrals gracefully, and keeps `key_points` as a single field rather than splitting the analyst output across two. Aria maps `sentiment` to emerald/rose/gray bullet dots at render time.
+**Outcome:** `KeyPoint` added to `report.py`. `StockReport.key_points` changed from `list[str]` to `list[KeyPoint]`. System prompt updated with sentiment classification guidance.
+
+---
+
 ## DEC-018 — Team hierarchy and sub-agent delegation protocol
 **Raised by:** Eran after observing that Aria's commit was bundled into Claude's commit and her worklog was left unstaged
 **Context:** As the team grew to include Aria as a specialist sub-agent, the chain of command for commits, approvals, and documentation was not clearly codified. Work was being silently absorbed into the wrong commit, and the delegation model was ambiguous.

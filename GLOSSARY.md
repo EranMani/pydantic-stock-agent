@@ -156,6 +156,19 @@ weighted_score = (fundamental_score × fundamental_weight)
 
 ---
 
+## Project-Specific Models
+
+### `KeyPoint`
+A Pydantic model in `report.py` representing a single analyst observation in the `StockReport`. Contains two fields:
+- `text: str` — a concise, data-grounded observation (e.g. "VCP detected", "P/E ratio of 18.2")
+- `sentiment: Literal["positive", "negative", "neutral"]` — LLM classification of the observation's directional implication
+
+Used in `StockReport.key_points: list[KeyPoint]`. Aria maps sentiment to bullet dot colours: emerald-400 (positive), rose-400 (negative), gray-500 (neutral).
+
+Chosen over two flat lists (`positive_points`, `negative_points`) to handle neutral observations and keep the analyst output as a single coherent field — see DEC-019.
+
+---
+
 ## Pydantic v2 — Type Composition
 
 ### `Annotated[T, ...]`
