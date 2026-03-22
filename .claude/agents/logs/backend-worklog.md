@@ -9,13 +9,26 @@
 
 | Date | Task | Status | Key Decision |
 |---|---|---|---|
-| — | — | — | Awaiting first task assignment |
+| 2026-03-22 | Identity verification — first commit as Rex | ✅ Done | No engineering decision — contributor identity test only |
 
 ---
 
-## Active Work
+## 2026-03-22 — Identity Verification
 
-_No task in progress. Add a new entry here when a task begins._
+### Task Brief
+First commit under Rex's GitHub identity (`rex.stockagent@gmail.com`). No code changes.
+Purpose: confirm Rex appears as a named contributor in the repo, matching the pattern
+established by Aria (`aria.stockagent@gmail.com`).
+
+### Status
+`COMPLETE — commit proposal below, awaiting Eran's approval`
+
+### Notes
+No domain files were modified. This is a worklog-only commit — the minimum viable
+artifact to establish contributor identity in git history.
+
+Once Eran confirms Rex appears in the Contributors panel, the identity setup is verified
+and Step 38 work can begin.
 
 ---
 
