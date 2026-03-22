@@ -107,7 +107,7 @@ def _make_chip(label: str, key: str, active_set: set[str]) -> None:
 
     def on_select(e, k: str = key, c: ui.chip = chip, s: set = active_set) -> None:
         """Handle chip selection change — update active set and swap chip color."""
-        if e.value:
+        if e.args:
             s.add(k)
             c.props("color=indigo")
         else:

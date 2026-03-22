@@ -45,6 +45,14 @@ decisions, code review, and iterative improvement made in collaboration with Cla
   - `fetch_industry_peers` remains the only place peer discovery logic lives (no leakage into agent tools)
   **Suggested timing:** After Phase 5 is complete (Step 30+). Requires a dedicated strategy decision before implementation.
 
+### UI Bug Fixes
+
+- [x] **TASK-005** — Fix `AttributeError: 'GenericEventArguments' object has no attribute 'value'` in chip toggle handler
+  **Raised by:** Eran during live server testing (strategy panel chip clicks)
+  **Context:** `strategy_panel.py` `on_select` handler used `e.value` to read the chip's selected state. The `update:selected` event on `ui.chip(selectable=True)` delivers its boolean payload via `e.args`, not `e.value` — `e.value` only exists on `ValueChangeEventArguments` (sliders, checkboxes, inputs). Every chip click raised an unhandled `AttributeError`.
+  **Fix:** Changed `if e.value:` → `if e.args:` in `on_select`. One-line fix in `strategy_panel.py:110`.
+  **Acceptance criteria:** Chip toggles update `active_set` and swap chip color without errors.
+
 ### MCP Server
 
 - [x] **TASK-002** — Add `score_ticker` tool to the MCP server that mimics the CLI input/output without invoking the cloud LLM

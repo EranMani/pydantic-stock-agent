@@ -383,6 +383,20 @@ ui.circular_progress(value=score, min=1, max=10, show_value=True).props(
 ```
 Key props: `size` — outer diameter; `thickness` — arc width as a fraction of radius (0.15 = thin ring); `track-color` — the unfilled arc colour; `color` — Quasar semantic colour (not a Tailwind class). `show_value=True` renders the number inside the ring.
 
+### `e.args` vs `e.value` in NiceGUI event handlers
+NiceGUI delivers event payloads differently depending on the event type:
+- `e.value` — only available on `ValueChangeEventArguments` (sliders, checkboxes, `ui.input`, `ui.select`, etc.)
+- `e.args` — the raw payload for generic Vue/Quasar events registered via `.on("event-name", handler)`
+
+The `update:selected` event on `ui.chip(selectable=True)` is a raw Quasar event — its boolean payload arrives in `e.args`, not `e.value`. Using `e.value` raises `AttributeError: 'GenericEventArguments' object has no attribute 'value'`.
+```python
+# WRONG — update:selected is a raw Quasar event; GenericEventArguments has no .value
+chip.on("update:selected", lambda e: toggle(e.value))
+
+# CORRECT — payload is in e.args
+chip.on("update:selected", lambda e: toggle(e.args))
+```
+
 ### `ui.chip(selectable=True)` — QChip toggle (NiceGUI / Quasar)
 A Quasar `QChip` in selectable mode — a self-contained toggle with built-in selected/unselected visual states. Used in `strategy_panel.py` to replace the button+`_classes.clear()` pill hack.
 ```python
