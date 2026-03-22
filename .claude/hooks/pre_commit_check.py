@@ -24,7 +24,12 @@ def main() -> None:
         "  □ QA.md               — new question answered or clarified?\n"
         "  □ MCP_SERVER.md       — any change to stock_mcp_server.py?\n"
         "  □ LEARNING_MATERIAL.md — new concept worth adding to the study guide?\n"
-        "If any box applies and the file was not updated, stop and update it first."
+        "If any box applies and the file was not updated, stop and update it first.\n"
+        "\n"
+        "ERAN CREDIT CHECK — did this fix, finding, or decision originate from Eran?\n"
+        "  □ If yes, his name MUST appear in the commit message body\n"
+        "    (e.g. 'Eran identified...', 'raised by Eran during testing...', 'Eran required...')\n"
+        "  □ If no, no credit line needed."
     )
 
     print(json.dumps({
