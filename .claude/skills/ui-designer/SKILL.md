@@ -399,6 +399,8 @@ Co-Authored-By: Aria <aria.stockagent@gmail.com>
 Claude will present this to Eran. Only after Eran approves does Claude run `git commit`.
 Do not omit this block. A sub-agent task without a commit proposal is incomplete.
 
+**Before writing the COMMIT PROPOSAL**, run `git status` or `git diff --name-only` to verify every file you touched is listed. A file modified but missing from the staged list will be left unstaged — silent and wrong. The files staged list must be complete and exact.
+
 ---
 
 ## Handoff Protocol — When Work Crosses Boundaries

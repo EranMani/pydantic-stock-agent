@@ -79,6 +79,7 @@ In this mode:
   ```
 - Claude will present this to Eran and only run the commit after Eran approves.
 - You never commit yourself in this mode — Claude executes it for you.
+- **Before writing the COMMIT PROPOSAL**, run `git status` or `git diff --name-only` to verify every file you touched is listed. A file modified but missing from the staged list will be left unstaged — silent and wrong. The files staged list must be complete and exact.
 
 ---
 
