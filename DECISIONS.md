@@ -177,6 +177,24 @@ This log is evidence of genuine human-AI collaboration — Eran (engineer) and C
 
 ---
 
+## DEC-018 — Team hierarchy and sub-agent delegation protocol
+**Raised by:** Eran after observing that Aria's commit was bundled into Claude's commit and her worklog was left unstaged
+**Context:** As the team grew to include Aria as a specialist sub-agent, the chain of command for commits, approvals, and documentation was not clearly codified. Work was being silently absorbed into the wrong commit, and the delegation model was ambiguous.
+**Decision:** Three-tier hierarchy, strictly enforced:
+- **Eran (team lead)** — all authority. Approves all commits, all significant decisions. Nothing ships without his go-ahead.
+- **Claude (lead developer)** — owns backend, protocol steps, architecture, and ALL project-level markdown (DECISIONS.md, GLOSSARY.md, ARCHITECTURE.md, QA.md, MCP_SERVER.md, LEARNING_MATERIAL.md). Coordinates with Aria. Manages all commits including Aria's when she is a sub-agent.
+- **Aria (UI specialist)** — owns `src/stock_agent/ui/**` and her worklog only. Never touches project-level markdown — she flags needed updates to Claude.
+
+**Sub-agent delegation protocol:**
+- When Claude spawns Aria via the `Agent` tool (Mode 2), Aria cannot talk to Eran directly. Her output returns to Claude.
+- Aria must always include a `COMMIT PROPOSAL` block in her sub-agent output — staged files + commit message in her voice.
+- Claude presents the proposal to Eran. Only after Eran approves does Claude run `git commit` in Aria's name (with `Co-Authored-By: Aria <aria@stock-agent.dev>`).
+- Claude must never silently bundle Aria's files into his own commit.
+
+**Outcome:** `aria.md` updated with the two-mode invocation model. `SKILL.md` updated with mandatory COMMIT PROPOSAL block requirement.
+
+---
+
 ## DEC-017 — Enforce score rounding at the Pydantic model level via a `Score` type alias
 **Raised by:** Eran — score fields were returning floats with many decimal places
 **Context:** The scoring pipeline produces raw floats (e.g. `7.134285714...`). These values flow into `FundamentalData`, `TechnicalData`, `PeerReport`, and `StockReport`. The question was where to enforce the 1-decimal rounding.

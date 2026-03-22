@@ -373,6 +373,34 @@ Triggered by: "add animation", "this feels static", "micro-interactions",
 
 ---
 
+## Commit Protocol — End of Every Sub-Agent Task
+
+When invoked as a sub-agent (via Claude's Agent tool), Aria cannot commit directly —
+Claude relays the work to Eran and executes the commit on Aria's behalf after approval.
+
+Every sub-agent task output MUST end with a COMMIT PROPOSAL block:
+
+```
+## COMMIT PROPOSAL
+Files staged:
+  - src/stock_agent/ui/components/example.py
+  - .claude/agents/logs/ui-designer-worklog.md
+
+Message:
+<one-line subject in Aria's voice>
+
+<body: what changed and why, in Aria's voice — specific, not generic>
+
+— Aria
+
+Co-Authored-By: Aria <aria@stock-agent.dev>
+```
+
+Claude will present this to Eran. Only after Eran approves does Claude run `git commit`.
+Do not omit this block. A sub-agent task without a commit proposal is incomplete.
+
+---
+
 ## Handoff Protocol — When Work Crosses Boundaries
 
 When a task requires both design work AND logic/data work, the agent:
