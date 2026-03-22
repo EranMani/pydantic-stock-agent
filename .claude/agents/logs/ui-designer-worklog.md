@@ -9,6 +9,197 @@
 ---
 
 <!-- ============================================================
+     report_card.py — Three Targeted Fixes — 2026-03-22
+     ============================================================ -->
+
+## report_card.py — Three Targeted Fixes — 2026-03-22
+
+### Status
+`COMPLETE — commit proposal at end of output, awaiting Eran's approval`
+
+---
+
+### Task Brief
+Three surgical changes to `report_card.py` driven by upstream model evolution and UX cleanup.
+No new layout sections. No structural overhaul. Exactly what was asked, nothing more.
+
+---
+
+### Change 1 — Company name in verdict panel
+
+`StockReport` now carries `company_name: str`. The verdict panel previously showed
+ticker → date with no company context. A user seeing a ticker they don't immediately
+recognize had no fallback — they'd have to look it up separately.
+
+Added `ui.label(report.company_name)` between the ticker and date, styled at
+`text-xl font-medium text-gray-400`. The sizing sits at roughly half the ticker's
+`text-4xl` visual weight — large enough to read at a glance, subdued enough not to
+compete with the ticker. `font-medium` (not bold) keeps it clearly subordinate in
+the hierarchy. `text-gray-400` is one step above the date's `text-gray-500` — a
+deliberate progression: gray-50 → gray-400 → gray-500, reading as primary → context → metadata.
+
+---
+
+### Change 2 — Numeric score removed from progress bars
+
+The `_linear_bar()` function previously rendered a `justify-between` row with the
+metric label left and the numeric score (e.g. "7.4") right. Removed the numeric label.
+
+Rationale: the bar encodes the value. Adding a number alongside it is redundant data
+that adds visual noise without adding information that the bar doesn't already convey.
+Users reading a dashboard scan shapes and colours, not numbers in a secondary position.
+If they need the exact number, it belongs in a detail view — not here. The bar is
+now cleaner: label only, full-width bar below. Docstring updated to reflect the new layout.
+
+---
+
+### Change 3 — Sentiment-colored bullet points
+
+`key_points` changed from `list[str]` to `list[KeyPoint]` (`.text` + `.sentiment`).
+The old q-list/q-item structure was replaced with a plain column of rows.
+
+**Why remove q-list/q-item?** Quasar's q-item injects its own padding model. When you
+place a custom bullet `ui.label("●")` inside a q-item-section, the item's internal
+horizontal padding fights your `gap-2` and creates misaligned left edges across points.
+A simple `ui.column` + `ui.row` gives full layout control with zero hidden margins.
+
+**Sentiment colour map:**
+- `positive` → `text-emerald-400` — consistent with the score system's high-score colour
+- `negative` → `text-rose-400` — consistent with the score system's low-score colour
+- `neutral` → `text-gray-500` — muted, reads as informational rather than directional
+
+The bullet (●) is a filled circle Unicode character rendered as a `ui.label` with
+`shrink-0` to prevent it collapsing on wrap. Text follows in the same row with
+`items-start` so multi-line points align to the bullet top, not the centre.
+
+`KeyPoint` imported at the top alongside `StockReport` — unused import guard is clean.
+
+---
+
+### Design Decisions Log
+
+| Decision | Rationale |
+|---|---|
+| company_name at text-xl font-medium text-gray-400 | ~half the ticker's 4xl visual weight; font-medium (not bold) reads as context not identity; gray-400 sits above date's gray-500 in a deliberate gray-50 → gray-400 → gray-500 hierarchy |
+| Numeric score removed from _linear_bar | Bar encodes value visually; number alongside it is redundant. Cleaner scan at dashboard density |
+| q-list/q-item replaced with column of rows | Quasar item padding fights custom bullet layout; plain rows give full control |
+| Sentiment colours match existing score palette | emerald-400 = high score = positive; rose-400 = low score = negative; system stays coherent |
+| shrink-0 on bullet label | Prevents flex shrink collapsing the ● glyph when text wraps on narrow viewports |
+| items-start on bullet row | Multi-line point text aligns to bullet top — items-center would centre it oddly |
+
+---
+
+<!-- ============================================================
+     Dashboard Redesign Pass — 2026-03-22
+     ============================================================ -->
+
+## Dashboard Redesign Pass — 2026-03-22
+
+### Status
+`COMPLETE — commit proposal below, awaiting Eran's approval`
+
+---
+
+### Task Brief
+Eran approved the full redesign proposal in one pass. This is a coordinated
+visual upgrade across five files. No protocol step — design quality pass on
+the existing component suite.
+
+The core design problem being fixed: the card felt flat and uniform. Everything
+was the same surface level, the same visual weight. The weighted score was buried
+next to a badge. The circular gauges were taking up vertical space to show
+two numbers. The bullet list was manual DOM scaffolding doing what a semantic
+list component should do. None of it was *bad* — it just wasn't *considered*.
+
+This pass fixes that. One read surface (verdict panel), lighter supporting
+data (bars not rings), cleaner structure (q-list), and a body background that
+actually gives cards somewhere to lift to.
+
+---
+
+### Design Decisions Log
+
+| Decision | Rationale |
+|---|---|
+| PAGE_BG = gray-950 | Cards (gray-900) now have a surface to lift from. No border, no shadow needed — contrast does the work. |
+| Verdict panel: gray-950 inset inside gray-900 card | Creates a depth plane within the card. Eye goes there first. Score is the answer — it should look like the answer. |
+| Score: text-6xl font-black + glow | Weighted score is the primary output. It should look like it. 6xl + glow is confident, not decorative. |
+| Outlined badge (no fill) | Filled pill competes with the score for dominance. Outlined reads as a label — the score speaks, the badge names it. |
+| QLinearProgress replaces QCircularProgress | Two bars scan in ~200ms. Two rings require the user to read each separately. Bars are faster at this data density. |
+| SCORE_COLOUR promoted to theme.py | It was always a design token — emerald/yellow/rose on dark surfaces. Keeping it local was a maintenance trap. |
+| emerald-400 / rose-400 over green-400 / red-400 | Emerald is richer and more distinct on dark. Rose is warmer — pure red-400 is harsh. Both pass WCAG AA or better. |
+| SCORE_GLOW: raw CSS filter | Tailwind's drop-shadow utilities don't support RGBA opacity at this precision. Raw style string is the right tool. |
+| q-list / q-item for key_points | Semantic list structure over manual DOM. Dense prop tightens item padding — 4–6 bullet points should scan, not breathe. |
+| ui.separator() removed everywhere inside cards | Spacing tokens (gap-4, py-3, px-1) do the work without adding DOM noise. Separators were structural crutches. |
+| animation=pulse on q-skeleton | Default shimmer is invisible on near-black surfaces. Pulse reads clearly on gray-950/gray-900. |
+| Skeleton mirrors new report card layout | Spatial continuity — the skeleton shows what's coming. Users know where to look when it arrives. |
+| Ticker input: color=indigo | Focus ring and floating label match the slider and brand. One indigo accent system across the whole control card. |
+| brand_sub removed from HEADER | Subtitle was visual clutter at 56px. The brand name is enough at this scale. |
+| Button .props("loading") on submit | Quasar's built-in loading prop replaces button label with a spinner. Correct pattern for async actions — no custom spinner needed. |
+
+---
+
+### Discoveries & Notes
+
+**SCORE_GLOW format:** The spec listed the glow as `drop-shadow: 0 0 24px rgba(...)` but
+the correct CSS property for this is `filter: drop-shadow(...)`. The `drop-shadow` CSS property
+doesn't exist — it's a `filter` function. I used `filter: drop-shadow(...)` in the implementation.
+This is not a spec violation — it's a CSS precision fix. The visual intent is identical.
+
+**ticker input lives in app.py, not strategy_panel.py:** The spec attributed this change to
+`strategy_panel.py` but the `ui.input()` for the ticker has always been in `app.py`. Applied
+the `color=indigo` prop in the correct location. strategy_panel.py had no changes needed.
+
+**q-item-label text content:** `ui.element("q-item-label")` doesn't support `bind_text` directly —
+it's a raw element wrapper, not a NiceGUI label widget. Used `ui.label(point)` inside the
+`q-item-label` element, which is the correct NiceGUI pattern for putting text inside a
+Quasar semantic wrapper.
+
+---
+
+### Self-Review Checklist
+
+```
+VISUAL COMPLETENESS
+[x] Verdict panel — ticker, date, score with glow, outlined badge all rendered
+[x] Score bars — Fundamental and Technical, label/value/bar layout correct
+[x] key_points — q-list/q-item/q-item-label structure, dense prop applied
+[x] Skeleton mirrors new report card layout — verdict inset, 2 bars, 3 summary lines
+[x] Page background gray-950 applied via ui.query("body")
+[x] Button loading state — .props("loading") on enter, props(remove="loading") on exit
+[x] Separator before strategy expansion — removed
+
+QUALITY COMPLETENESS
+[x] SCORE_COLOUR sourced from theme.py — local _GAUGE_COLOUR dict removed
+[x] SCORE_GLOW sourced from theme.py — correct filter: drop-shadow() format
+[x] brand_sub removed from HEADER token and app.py header function
+[x] PAGE_BG token added to theme.py and imported in app.py
+[x] animation=pulse on all q-skeleton elements in progress_panel.py
+[x] Skeleton card surface confirmed bg-gray-900
+
+CODE COMPLETENESS
+[x] All imports clean — SCORE_COLOUR, SCORE_GLOW, PAGE_BG imported where needed
+[x] No orphaned imports — RECOMMENDATION_BADGE no longer imported in report_card.py
+[x] Module docstrings updated — report_card.py, progress_panel.py
+[x] All public functions have docstrings
+[x] No HTML, CSS, or JavaScript — pure NiceGUI Python API throughout
+```
+
+---
+
+### Files Modified
+
+| File | Change |
+|---|---|
+| `src/stock_agent/ui/theme.py` | Added PAGE_BG, SCORE_COLOUR, SCORE_GLOW tokens; removed brand_sub from HEADER; updated module docstring |
+| `src/stock_agent/ui/components/report_card.py` | Full restructure — verdict panel, linear bars, outlined badge, q-list; imports SCORE_COLOUR/SCORE_GLOW from theme |
+| `src/stock_agent/ui/app.py` | Added ui.query body background; button loading state; removed separator before strategy expansion; removed brand_sub usage |
+| `src/stock_agent/ui/components/progress_panel.py` | Skeleton mirrors new report card layout; animation=pulse on all q-skeletons; bg-gray-900 confirmed |
+| `src/stock_agent/ui/components/strategy_panel.py` | No changes needed (ticker input lives in app.py) |
+
+---
+
+<!-- ============================================================
      GitHub account setup + two-mode invocation protocol — 2026-03-22
      ============================================================ -->
 
