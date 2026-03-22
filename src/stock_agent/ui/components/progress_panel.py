@@ -4,10 +4,14 @@ Shows a QSkeleton card while an analysis is running (replacing the previous
 plain spinner), a QBanner for error states, and the full report card when
 analysis completes.
 
-The skeleton card mirrors the report card layout — header row, gauge row,
+The skeleton card mirrors the report card layout — verdict inset, score bars,
 summary rows — so the user has spatial context about what is loading. This
 is a strict improvement over a generic spinner: users know what the result
 will look like and where to look when it arrives.
+
+Skeleton animation: animation=pulse is set on every q-skeleton. The default
+shimmer animation is too subtle on near-black surfaces (gray-950/gray-900)
+and becomes nearly invisible. Pulse provides clear, legible feedback on dark.
 
 The QBanner error state is semantically correct (a banner is the right
 component for persistent, dismissible-ish inline messages) and visually
@@ -49,40 +53,50 @@ def _skeleton_card() -> None:
 
     Shown while is_running is True. Mirrors the structure of report_card.py
     so the user has spatial context about what is loading — a flat card with:
-      - Header row: ticker name placeholder + recommendation badge placeholder
-      - Score gauges row: three circle skeletons (matching QCircularProgress)
+      - Verdict inset: ticker name placeholder + score number + badge placeholder
+      - Score bars row: two horizontal bar skeletons (Fundamental, Technical)
       - Summary section: three text-line skeletons
 
-    q-skeleton type values used:
-      "text"   — variable-width inline text block (full width by default)
-      "circle" — perfect circle, matched to the 80px gauge size
-      "QBadge" — pill-shaped block matching QBadge dimensions
+    q-skeleton props:
+      animation=pulse  — pulse animation reads clearly on dark surfaces; the
+                         default shimmer animation is too subtle on near-black
+                         backgrounds and nearly invisible on gray-950/gray-900.
+      type values:
+        "text"   — variable-width inline text block
+        "rect"   — filled rectangle (used for score bar placeholders)
+        "QBadge" — pill-shaped block matching QBadge dimensions
+
+    Card surface: bg-gray-900 — matches the real report card surface.
 
     Uses ui.element("q-skeleton") with Quasar props via .props() —
     NiceGUI's standard pattern for Quasar elements without a dedicated wrapper.
     """
-    with ui.card().props("flat").classes("w-full p-6 gap-4 bg-gray-800"):
-        # Header row — ticker label placeholder + badge placeholder
-        with ui.row().classes("w-full justify-between items-center"):
-            ui.element("q-skeleton").props('type=text width="120px" height="32px"')
-            ui.element("q-skeleton").props('type=QBadge width="80px"')
+    with ui.card().props("flat").classes("w-full p-6 gap-4 bg-gray-900"):
 
-        ui.separator()
+        # Verdict inset placeholder — mirrors the gray-950 verdict panel
+        with ui.element("div").classes("w-full bg-gray-950 rounded-xl p-5 gap-3 flex flex-col"):
+            # Ticker + date placeholders
+            ui.element("q-skeleton").props('type=text width="120px" height="40px" animation=pulse')
+            ui.element("q-skeleton").props('type=text width="80px" height="12px" animation=pulse')
+            # Score + badge placeholders
+            with ui.row().classes("items-center gap-3 pt-1"):
+                ui.element("q-skeleton").props('type=text width="80px" height="56px" animation=pulse')
+                ui.element("q-skeleton").props('type=QBadge width="72px" animation=pulse')
 
-        # Score gauges row — three circle skeletons matching 80px QCircularProgress
-        with ui.row().classes("w-full justify-around py-2"):
-            for _ in range(3):
-                with ui.column().classes("items-center gap-1"):
-                    ui.element("q-skeleton").props('type=circle size="80px"')
-                    ui.element("q-skeleton").props('type=text width="60px" height="14px"')
+        # Score bars placeholders — two horizontal bars (Fundamental, Technical)
+        with ui.column().classes("w-full gap-3 px-1"):
+            for _ in range(2):
+                with ui.column().classes("w-full gap-1"):
+                    with ui.row().classes("w-full justify-between"):
+                        ui.element("q-skeleton").props('type=text width="80px" height="12px" animation=pulse')
+                        ui.element("q-skeleton").props('type=text width="24px" height="12px" animation=pulse')
+                    ui.element("q-skeleton").props('type=rect width="100%" height="8px" animation=pulse').classes("rounded-full")
 
-        ui.separator()
-
-        # Summary text skeleton — three lines suggesting a paragraph
-        with ui.column().classes("w-full gap-2"):
-            ui.element("q-skeleton").props("type=text")
-            ui.element("q-skeleton").props("type=text")
-            ui.element("q-skeleton").props('type=text width="70%"')
+        # Summary text skeleton — three lines suggesting bullet points
+        with ui.column().classes("w-full gap-2 px-1"):
+            ui.element("q-skeleton").props('type=text animation=pulse')
+            ui.element("q-skeleton").props('type=text animation=pulse')
+            ui.element("q-skeleton").props('type=text width="70%" animation=pulse')
 
 
 def progress_panel(state: AnalysisState) -> None:

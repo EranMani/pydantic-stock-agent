@@ -47,7 +47,7 @@ from stock_agent.config import settings
 from stock_agent.models.report import StockReport
 from stock_agent.ui.components.progress_panel import AnalysisState, progress_panel
 from stock_agent.ui.components.strategy_panel import StrategyState, strategy_panel
-from stock_agent.ui.theme import COLOURS, HEADER, SPACING, TRANSITIONS, TYPOGRAPHY, apply_theme
+from stock_agent.ui.theme import COLOURS, HEADER, PAGE_BG, SPACING, TRANSITIONS, TYPOGRAPHY, apply_theme
 
 # Analyse button — dominant indigo, full width, min 44px touch target.
 # Applied at initial render and re-applied after enable/disable to preserve classes.
@@ -72,9 +72,10 @@ def app_header() -> None:
     with ui.element("div").classes(HEADER["bar"]):
         with ui.element("div").classes(HEADER["inner"]):
             # Left side — brand identity
+            # brand_sub subtitle removed — visual clutter at 56px header height.
+            # The brand name alone is the right signal at this scale.
             with ui.row().classes("items-center gap-0"):
                 ui.label("Stock Agent").classes(HEADER["brand_name"])
-                ui.label("Autonomous PydanticAI stock analyst").classes(HEADER["brand_sub"])
 
             # Right side — live status indicator
             with ui.row().classes("items-center"):
@@ -92,6 +93,13 @@ def create_ui() -> None:
     def index() -> None:
         """Main dashboard — four-zone layout with card surfaces."""
         apply_theme()
+
+        # Set the page body background to gray-950 — one step darker than the
+        # card surfaces (gray-900). Cards lift visibly from the page without
+        # needing a border or shadow to separate them. ui.query() targets the
+        # actual <body> element — the only way to set page-level background in
+        # NiceGUI without a CSS file.
+        ui.query("body").classes(f"bg-{PAGE_BG}")
 
         # Full-bleed sticky toolbar — outside the content column intentionally.
         # Fixed position clears the page flow; the content column below is offset
@@ -117,8 +125,7 @@ def create_ui() -> None:
             #   Row 2: "Scoring Weights" label left + live percentage right
             #   Row 3: Weight slider (full width)
             #   Row 4: Analyse button (full width, dominant)
-            #   ── separator ──
-            #   Row 5: Scoring Strategy expansion (collapsed by default)
+            #   Row 5: Scoring Strategy expansion (collapsed by default, no separator)
             #           └─ Fundamental pills
             #           └─ Technical pills
             #
@@ -138,9 +145,12 @@ def create_ui() -> None:
                 # rounded (matches card's rounded-xl personality), label (floating Material
                 # label replaces the separate ui.label() above — cleaner DOM and better UX).
                 # The separate label row is removed; the QInput label prop handles it natively.
+                # color=indigo: Quasar QInput focus ring and floating label colour.
+                # Matches the brand primary and the slider color already in use —
+                # the whole control card now reads as a single indigo-accented system.
                 ticker_input = ui.input(
                     placeholder="e.g. AAPL, NVDA, ONDS",
-                ).classes("w-full").props('outlined rounded label="Ticker Symbol"')
+                ).classes("w-full").props('outlined rounded label="Ticker Symbol" color=indigo')
 
                 # Row 2 — Scoring weight label + live percentage display
                 weight_label = ui.label(
@@ -178,7 +188,8 @@ def create_ui() -> None:
                 async def on_analyse() -> None:
                     """Dispatch POST /analyze and update analysis_state with the result.
 
-                    Disables the button while running to prevent double-submit.
+                    Disables the button and activates Quasar's loading spinner prop
+                    while running to prevent double-submit and communicate progress.
                     Runs as an asyncio coroutine so the NiceGUI event loop stays
                     responsive while the synchronous pipeline executes.
                     Phase 9 replaces this with a Celery task dispatch + Redis polling.
@@ -188,8 +199,12 @@ def create_ui() -> None:
                         ui.notify("Enter a ticker symbol", type="warning")
                         return
 
-                    # Lock the button to prevent double-submit
+                    # Lock the button to prevent double-submit.
+                    # .props("loading") activates Quasar's built-in button spinner —
+                    # replaces the button label with a circular progress indicator.
+                    # This is the correct Quasar pattern for async button actions.
                     analyse_btn.set_enabled(False)
+                    analyse_btn.props("loading")
 
                     analysis_state.is_running = True
                     analysis_state.message = f"Analysing {ticker}..."
@@ -216,14 +231,16 @@ def create_ui() -> None:
                     finally:
                         analysis_state.is_running = False
                         analysis_state.message = ""
-                        # Re-enable the button regardless of outcome
+                        # Re-enable the button and clear the loading spinner.
+                        analyse_btn.props(remove="loading")
                         analyse_btn.set_enabled(True)
 
                 analyse_btn.on_click(on_analyse)
 
-                # Separator + strategy expansion inside the card — strategy
-                # configuration expands in context, not as a separate surface.
-                ui.separator()
+                # Strategy expansion inside the card — configuration expands in
+                # context, not as a separate surface. Separator removed: the
+                # expansion header itself provides the visual boundary when open,
+                # and gap-4 on the parent column handles breathing room at rest.
                 strategy_panel(strategy_state)
 
             # ------------------------------------------------------------------
