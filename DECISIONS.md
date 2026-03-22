@@ -223,3 +223,14 @@ This log is evidence of genuine human-AI collaboration — Eran (engineer) and C
 **Decision:** `KeyPoint` model (Option B). The schema gives the LLM a clear contract, handles neutrals gracefully, and keeps `key_points` as a single field rather than splitting the analyst output across two. Aria maps `sentiment` to emerald/rose/gray bullet dots at render time.
 **Outcome:** `KeyPoint` added to `report.py`. `StockReport.key_points` changed from `list[str]` to `list[KeyPoint]`. System prompt updated with sentiment classification guidance.
 
+---
+
+## DEC-020 — Alembic reads DATABASE_URL from Settings at runtime, not from alembic.ini
+**Raised by:** Rex (Step 38 backend infrastructure setup)
+**Context:** `alembic init` generates `alembic.ini` with a `sqlalchemy.url` placeholder. The naive approach is to put the database URL there — but this is a plaintext file committed to the repo.
+**Options considered:**
+- Hardcode URL in `alembic.ini` — simple, but puts credentials in the repo and duplicates a value that already lives in `config.py`
+- Inject URL at runtime via `migrations/env.py` — `env.py` imports `settings` from `stock_agent.config` and calls `config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)` before Alembic reads it
+**Decision:** Runtime injection via `env.py`. `alembic.ini` has no URL — the `sqlalchemy.url` line is replaced with a comment explaining where the value comes from. Single source of truth: `DATABASE_URL` is always `config.py` → environment variable.
+**Outcome:** `migrations/env.py` imports `stock_agent.config.settings`. `alembic.ini` `sqlalchemy.url` is nulled out. No secrets in any committed file.
+

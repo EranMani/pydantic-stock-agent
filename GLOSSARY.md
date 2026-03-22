@@ -46,6 +46,10 @@ Quick reference for financial concepts, pandas functions, async/Python terms, an
 | `asyncio.to_thread()` | Async | Runs a blocking function in a thread pool, freeing the event loop |
 | `asyncio.gather()` | Async | Runs multiple coroutines concurrently; returns results in input order |
 | `asyncio.run()` | Async | Sync-to-async bridge — creates an event loop; used in Celery task bodies |
+| `asyncpg` | Database | Async-only PostgreSQL driver; requires `postgresql+asyncpg://` URL prefix; cannot be used with SQLAlchemy's synchronous engine path |
+| `AsyncSession` | Database | SQLAlchemy async session class; all ORM operations must be `await`ed; injected via FastAPI dependency |
+| Alembic | Database | Schema migration tool for SQLAlchemy; every schema change is a versioned migration file with `upgrade()` and `downgrade()` |
+| `alembic revision --autogenerate` | Database | Generates a migration file by diffing ORM models against the live schema; always review before applying |
 | Lazy Initialisation | Python | Defer object creation to first call via `@lru_cache`; avoids startup failures |
 | Lazy Import | Python | Import inside a function body to break circular imports at module load time |
 | Heavy vs Lightweight Tool | Design | Heavy: runs full pipeline once. Lightweight: returns a specific subset cheaply on demand |

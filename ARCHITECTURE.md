@@ -382,4 +382,18 @@ Without the lightweight tool, the agent re-runs the full pipeline or reasons bli
 
 ---
 
+---
+
+## Database Layer (Phase 8 — Steps 38–43)
+
+**Stack:** PostgreSQL + SQLAlchemy async (`sqlalchemy[asyncio]>=2`, `asyncpg`) + Alembic migrations.
+
+**Key contracts:**
+- `DATABASE_URL` lives exclusively in `config.py` (Settings). Alembic reads it from Settings at runtime via `migrations/env.py` — never from `alembic.ini`.
+- All ORM interactions use `AsyncSession`. The session factory is managed by the FastAPI `lifespan` hook (startup: create engine, shutdown: `engine.dispose()`).
+- Schema changes are Alembic migrations only — `Base.metadata.create_all()` is never called in production.
+- Every migration must have a working `downgrade()` and must be safe to run on a populated table.
+
+**Migration path:** `alembic upgrade head` (apply) | `alembic downgrade -1` (rollback one step).
+
 *More diagrams will be added as phases are built.*
