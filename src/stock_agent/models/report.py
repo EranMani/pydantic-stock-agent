@@ -6,9 +6,7 @@ PeerReport and StockReport are the top-level agent outputs.
 """
 
 from datetime import datetime
-from typing import Literal
-
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.functional_validators import AfterValidator
@@ -84,6 +82,22 @@ class TechnicalData(BaseModel):
     )
 
 
+class KeyPoint(BaseModel):
+    """A single analyst observation with a sentiment classification."""
+
+    text: str = Field(
+        description="Concise observation referencing a specific data value (e.g. 'VCP detected', 'P/E ratio of 18.2', 'Trend Template PASS'). No generic statements.",
+    )
+    sentiment: Literal["positive", "negative", "neutral"] = Field(
+        description=(
+            "Sentiment of this observation: "
+            "'positive' — a bullish signal or strength (e.g. strong revenue growth, VCP detected); "
+            "'negative' — a bearish signal or risk (e.g. high beta, Trend Template FAIL); "
+            "'neutral' — a factual observation with no clear directional implication (e.g. market cap of $1.2B)."
+        ),
+    )
+
+
 class PeerReport(BaseModel):
     """Lightweight peer comparison result — ticker, score, and recommendation only."""
 
@@ -104,6 +118,9 @@ class StockReport(BaseModel):
     ticker: str = Field(
         description="Stock ticker symbol being analysed (e.g. 'AAPL').",
     )
+    company_name: str = Field(
+        description="Full company name (e.g. 'Apple Inc.'). Use the value provided in the analysis prompt.",
+    )
     analysis_date: datetime = Field(
         description="UTC timestamp of when this analysis was generated.",
     )
@@ -116,11 +133,11 @@ class StockReport(BaseModel):
     weighted_score: Score = Field(
         description="Final score combining fundamental and technical scores using ScoringStrategy weights. Range [1.0, 10.0].",
     )
-    key_points: list[str] = Field(
+    key_points: list[KeyPoint] = Field(
         description=(
-            "4–6 concise bullet points explaining the key drivers behind the recommendation. "
-            "Each point must reference a specific data value (e.g. 'VCP detected', "
-            "'P/E ratio of 18.2', 'Trend Template PASS'). No generic statements."
+            "4–6 analyst observations explaining the key drivers behind the recommendation. "
+            "Each point must reference a specific data value and carry a sentiment classification: "
+            "'positive' for bullish signals, 'negative' for bearish signals, 'neutral' for factual context."
         ),
     )
     recommendation: Literal["BUY", "WATCH", "AVOID"] = Field(

@@ -17,7 +17,22 @@ decisions, code review, and iterative improvement made in collaboration with Cla
 
 ### Output & Reporting
 
-- [~] **TASK-006** — Replace `summary: str` with `key_points: list[str]` in `StockReport` for structured analyst output
+- [x] **TASK-006** — Replace `summary: str` with `key_points: list[str]` in `StockReport` for structured analyst output
+
+- [~] **TASK-007** — Add `company_name: str` to `StockReport` and render it in the verdict panel
+  **Raised by:** Eran during report card review
+  **Context:** The verdict panel shows only the ticker symbol. Adding the full company name at half the ticker font size gives immediate context without requiring the user to know every ticker.
+  **Scope:** `report.py` (add field), `agent.py` (populate in prompt), Aria renders in verdict panel.
+
+- [~] **TASK-008** — Replace `key_points: list[str]` with `key_points: list[KeyPoint]` for sentiment-aware bullet points
+  **Raised by:** Eran during report card review
+  **Context:** Flat strings give no signal about whether a point is good or bad news. A `KeyPoint(text, sentiment)` model lets the LLM classify each point and Aria render positive/negative/neutral bullets in green/red/gray.
+  **Scope:** `report.py` (add `KeyPoint` model), `agent.py` (update system prompt), Aria renders colored bullets.
+
+- [~] **TASK-009** — Remove numeric score labels from QLinearProgress bars
+  **Raised by:** Eran during report card review
+  **Context:** The bar itself communicates the value visually. The number alongside it is redundant and clutters the layout.
+  **Scope:** Aria only — one-line change in `report_card.py`.
   **Raised by:** Eran after observing the analyst summary renders as one unreadable paragraph
   **Context:** The LLM produces a free-form narrative string with no structural guidance. The UI has no way to break it up meaningfully. Changing the field to a list gives the LLM a clear schema contract and makes rendering trivial.
   **Approach:** Option A — model field change + system prompt update + UI re-render via Aria.

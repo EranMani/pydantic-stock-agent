@@ -49,11 +49,15 @@ STRICT RULES — violations invalidate the analysis:
    - weighted_score >= 7.0  → "BUY"
    - weighted_score >= 4.0  → "WATCH"
    - weighted_score <  4.0  → "AVOID"
-5. The key_points field must contain 4–6 short, specific bullet points explaining
-   the key drivers behind the recommendation. Each point must reference a concrete
-   data value (e.g. "VCP detected", "P/E ratio of 18.2", "Trend Template PASS",
-   "revenue growth of +42%"). Do not write generic statements — every point must
-   be grounded in a specific number or signal from the tool results.
+5. The key_points field must contain 4–6 KeyPoint objects. Each KeyPoint has:
+   - text: a concise observation referencing a specific data value (e.g. "VCP
+     detected", "P/E ratio of 18.2", "Trend Template PASS", "revenue growth +42%").
+     No generic statements — every point must be grounded in tool result data.
+   - sentiment: classify each point as "positive" (bullish signal or strength),
+     "negative" (bearish signal or risk), or "neutral" (factual context with no
+     clear directional implication).
+6. The company_name field must be populated with the full company name provided
+   in the analysis prompt.
 """
 
 
@@ -130,8 +134,10 @@ async def run_analysis(ticker: str, strategy: ScoringStrategy) -> StockReport:
         f"5. Compute weighted_score = (fundamental_score × {strategy.fundamental_weight}) "
         f"+ (technical_score × {strategy.technical_weight}).\n"
         f"6. Apply the recommendation thresholds from the system prompt.\n"
-        f"7. Write 4–6 specific, data-driven key_points — each one referencing a concrete signal or value.\n"
-        f"8. Produce the final StockReport."
+        f"7. Write 4–6 KeyPoint objects — each with a specific data-driven text and a sentiment "
+        f"('positive', 'negative', or 'neutral').\n"
+        f"8. Set company_name to '{company_name}'.\n"
+        f"9. Produce the final StockReport."
     )
 
     result = await agent.run(prompt, deps=deps)
