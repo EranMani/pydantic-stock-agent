@@ -37,6 +37,22 @@ class Settings(BaseSettings):
         default="http://localhost:11434",
         description="Ollama server base URL for local LLM inference (llama3.2). Use http://ollama:11434 inside Docker.",
     )
+    DATABASE_URL: str = Field(
+        default="postgresql+asyncpg://user:pass@localhost:5432/stockagent",
+        description="PostgreSQL connection string for SQLAlchemy async engine. Use asyncpg driver. In Docker, host is 'postgres'.",
+    )
+    REDIS_URL: str = Field(
+        default="redis://localhost:6379/0",
+        description="Redis connection URL for Celery broker and progress state whiteboard. Use redis://redis:6379/0 inside Docker.",
+    )
+    CELERY_BROKER_URL: str = Field(
+        default="redis://localhost:6379/0",
+        description="Celery broker URL — must match REDIS_URL for this project's single-Redis setup.",
+    )
+    CELERY_RESULT_BACKEND: str = Field(
+        default="redis://localhost:6379/1",
+        description="Celery result backend URL — uses Redis DB 1 to separate results from the broker channel.",
+    )
 
 
 # Module-level singleton — import this throughout the codebase
