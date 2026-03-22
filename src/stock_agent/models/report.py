@@ -8,7 +8,13 @@ PeerReport and StockReport are the top-level agent outputs.
 from datetime import datetime
 from typing import Literal
 
+from typing import Annotated
+
 from pydantic import BaseModel, ConfigDict, Field
+from pydantic.functional_validators import AfterValidator
+
+# Score fields are always rounded to one decimal place (e.g. 7.1, 4.0)
+Score = Annotated[float, AfterValidator(lambda v: round(v, 1))]
 
 
 class FundamentalData(BaseModel):
@@ -34,7 +40,7 @@ class FundamentalData(BaseModel):
         default=None,
         description="Measure of price volatility relative to the market. Beta > 1 means amplified moves; beta < 0 means inverse correlation to the market.",
     )
-    score: float = Field(
+    score: Score = Field(
         ge=0.0,
         description="Computed fundamental score in the range [1.0, 10.0]. Higher is better.",
     )
@@ -72,7 +78,7 @@ class TechnicalData(BaseModel):
     vcp_detected: bool = Field(
         description="True if a Volatility Contraction Pattern is detected — successive price ranges narrowing over the last 60 bars.",
     )
-    score: float = Field(
+    score: Score = Field(
         ge=0.0,
         description="Computed technical score in the range [1.0, 10.0]. Higher is better.",
     )
@@ -84,7 +90,7 @@ class PeerReport(BaseModel):
     ticker: str = Field(
         description="Stock ticker symbol of the peer company (e.g. 'MSFT').",
     )
-    weighted_score: float = Field(
+    weighted_score: Score = Field(
         description="Final weighted score for this peer in the range [1.0, 10.0].",
     )
     recommendation: Literal["BUY", "WATCH", "AVOID"] = Field(
@@ -101,13 +107,13 @@ class StockReport(BaseModel):
     analysis_date: datetime = Field(
         description="UTC timestamp of when this analysis was generated.",
     )
-    fundamental_score: float = Field(
+    fundamental_score: Score = Field(
         description="Fundamental pipeline score in the range [1.0, 10.0].",
     )
-    technical_score: float = Field(
+    technical_score: Score = Field(
         description="Technical pipeline score in the range [1.0, 10.0].",
     )
-    weighted_score: float = Field(
+    weighted_score: Score = Field(
         description="Final score combining fundamental and technical scores using ScoringStrategy weights. Range [1.0, 10.0].",
     )
     summary: str = Field(
