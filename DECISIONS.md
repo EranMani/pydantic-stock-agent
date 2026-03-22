@@ -177,6 +177,18 @@ This log is evidence of genuine human-AI collaboration — Eran (engineer) and C
 
 ---
 
+## DEC-017 — Enforce score rounding at the Pydantic model level via a `Score` type alias
+**Raised by:** Eran — score fields were returning floats with many decimal places
+**Context:** The scoring pipeline produces raw floats (e.g. `7.134285714...`). These values flow into `FundamentalData`, `TechnicalData`, `PeerReport`, and `StockReport`. The question was where to enforce the 1-decimal rounding.
+**Options considered:**
+- Round in the display layer (report card, MCP tool formatters) — each consumer must remember to round; easy to forget
+- Round inside each scorer function (`calculate_fundamental_score`, etc.) — couples a presentation concern to business logic
+- `Score` type alias with `AfterValidator(lambda v: round(v, 1))` on every score field — rounding is guaranteed at model construction time, enforced by Pydantic, invisible to callers
+**Decision:** `Score` type alias at the model level. One definition in `report.py`, applied to all six score fields across the four models. The pipeline and scorers produce any precision they like — the model always stores exactly one decimal place. No display layer or scorer needs to know about it.
+**Outcome:** `Score = Annotated[float, AfterValidator(lambda v: round(v, 1))]` added to `report.py`. Applied to `FundamentalData.score`, `TechnicalData.score`, `PeerReport.weighted_score`, and `StockReport.fundamental_score / technical_score / weighted_score`.
+
+---
+
 ## DEC-016 — Fixed full-bleed toolbar with height contract (Aria)
 **Raised by:** Eran — page felt unmodern, title was floating with no visual anchor
 **Context:** The "Stock Agent" title and subtitle were bare labels inside the content column — no background, no frame, no hierarchy. The page had no architectural top edge.

@@ -156,6 +156,36 @@ weighted_score = (fundamental_score × fundamental_weight)
 
 ---
 
+## Pydantic v2 — Type Composition
+
+### `Annotated[T, ...]`
+A standard Python typing construct (`from typing import Annotated`) that attaches metadata to a type without changing the type itself. Pydantic v2 reads the metadata and uses it to add validation, serialisation, or transformation behaviour.
+```python
+from typing import Annotated
+from pydantic.functional_validators import AfterValidator
+
+# float field that is always rounded to 1 decimal place after validation
+Score = Annotated[float, AfterValidator(lambda v: round(v, 1))]
+```
+`Annotated` is the glue — `float` is the base type, `AfterValidator(...)` is the behaviour attached to it.
+
+### `AfterValidator` (Pydantic v2)
+A Pydantic v2 hook (`from pydantic.functional_validators import AfterValidator`) that runs a function **after** Pydantic has already coerced the value to the declared type. The function receives the already-validated value and must return the transformed value.
+```python
+Score = Annotated[float, AfterValidator(lambda v: round(v, 1))]
+# pipeline produces 7.134285714...
+# Pydantic coerces to float → AfterValidator rounds → stored as 7.1
+```
+Contrast with `BeforeValidator` (runs before coercion, receives raw input) and `PlainValidator` (replaces coercion entirely). Use `AfterValidator` when you want to transform an already-valid value — rounding, clamping, normalising.
+
+### `Score` type alias (project-specific)
+```python
+Score = Annotated[float, AfterValidator(lambda v: round(v, 1))]
+```
+A project-wide type alias in `report.py` applied to every score field across `FundamentalData`, `TechnicalData`, `PeerReport`, and `StockReport`. Guarantees 1-decimal precision at model construction time — scorers and pipeline code can produce any precision, the model always stores `7.1` not `7.134285714...`. One definition, six fields, zero per-consumer rounding logic.
+
+---
+
 ## Async & Python Concepts
 
 ### Event Loop
