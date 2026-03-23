@@ -330,3 +330,73 @@ Backend-relevant entries in `DECISIONS.md`:
 | — | `job_id: String(36)` on `AnalysisJobRecord` is the stable Redis/DB shared identifier — never Celery's `task_id` | 39 |
 
 *More entries will be added as Phases 8–10 are built.*
+
+---
+
+## 9. Database Design Principles
+
+Key concepts that guide every table and column decision in this project.
+
+---
+
+### When to create a separate table
+
+Split into a separate table when an entity has:
+- A **distinct lifecycle** — it is created and destroyed independently of other entities
+- **Independent meaning** — it has value on its own, not just as a property of something else
+- **Asymmetric existence** — one can exist without the other
+
+Keep in the same table when fields are just **properties** of the same thing — they always appear together, always mean nothing in isolation.
+
+**Example in this project:**
+- `AnalysisJobRecord` and `StockReportRecord` → separate tables: a job can exist without a report; they have different lifecycles and different meaning
+- `fundamental_score` and `technical_score` → same table (`stock_reports`): a score has no independent meaning — it's just a property of the report
+
+---
+
+### Command / Result separation (lightweight CQRS)
+
+A pattern where the record of **what was requested** (command) is kept separate from the record of **what was produced** (result).
+
+| Concept | Our implementation |
+|---|---|
+| Command | `AnalysisJobRecord` — "analyse this ticker was requested" |
+| Result | `StockReportRecord` — "here is what the analysis produced" |
+
+**The rule:** a result cannot exist without a command. A command can exist without a result.
+
+This means:
+- Every job request creates an `AnalysisJobRecord` immediately — always
+- `StockReportRecord` is only created on successful completion — conditionally
+
+**Why it matters:** on a server crash, you can query `AnalysisJobRecord` for all `pending` and `running` jobs and re-dispatch them. You always know what was asked for, regardless of whether it succeeded.
+
+---
+
+### `AnalysisJobRecord` as the ground pillar
+
+The job record is created **first**, before anything else is dispatched:
+
+```
+1. FastAPI generates job_id (UUID)
+2. INSERT AnalysisJobRecord  ← ground pillar
+3. Celery task dispatched with job_id
+4. job_id returned to UI for polling
+```
+
+Everything downstream — Celery, Redis, the UI polling loop — derives its identity from `job_id`. If the insert fails, nothing is dispatched. No orphaned jobs, no phantom Redis keys.
+
+---
+
+### `AnalysisJobRecord` as the operational dashboard
+
+At any point the table answers operational questions:
+
+| Query | Meaning |
+|---|---|
+| `status = 'pending'` | Enqueued, not yet picked up by a worker |
+| `status = 'running'` | Worker is active — check Redis for live progress |
+| `status = 'complete'` | `StockReportRecord` exists for this job |
+| `status = 'failed'` | Pipeline error — no report produced |
+
+After a crash: scan for `pending` / `running` rows and re-dispatch. The database is the recovery source — Redis is ephemeral and may not survive a restart.
