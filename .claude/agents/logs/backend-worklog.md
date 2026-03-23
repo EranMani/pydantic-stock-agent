@@ -9,8 +9,67 @@
 
 | Date | Task | Status | Key Decision |
 |---|---|---|---|
+| 2026-03-23 | Step 39 — define StockReportRecord and AnalysisJobRecord ORM models | ✅ Done | Numeric(4,1) over Float for score columns — exact decimal storage in Postgres |
 | 2026-03-23 | Step 38 — install sqlalchemy/alembic/asyncpg, configure DATABASE_URL, init migrations | ✅ Done | env.py reads DATABASE_URL from Settings at runtime — alembic.ini has no hardcoded URL |
 | 2026-03-22 | Identity verification — first commit as Rex | ✅ Done | No engineering decision — contributor identity test only |
+
+---
+
+## 2026-03-23 — Step 39: Define StockReportRecord and AnalysisJobRecord ORM Models
+
+### Task Brief
+Define the two SQLAlchemy ORM models that form the database schema for Phase 8.
+
+Files affected:
+- `src/stock_agent/db/__init__.py` — created (package init)
+- `src/stock_agent/db/models.py` — created (both ORM models + Base)
+- `migrations/env.py` — updated: `target_metadata = Base.metadata` (enables autogenerate)
+- `tests/test_db.py` — created (11 structural + round-trip tests, SQLite in-memory)
+- `BACKEND.md` — updated (Section 4 now has real model documentation)
+
+### Decisions
+
+**`Numeric(4, 1)` over `Float` for score columns:** `Float` in PostgreSQL stores IEEE 754 binary fractions — 7.1 becomes 7.09999999999999964. `Numeric(4, 1)` stores exact decimals. Score values like 7.1 or 10.0 must be exact; they flow into API responses and will be compared in tests. This is not a minor precision concern — it's a correctness issue.
+
+**`job_id: String(36)` with UNIQUE constraint:** The `job_id` is the stable identifier shared between `AnalysisJobRecord` and the Redis progress key `job:{job_id}:progress`. It must be stable for the entire job lifecycle — Celery's `task_id` changes per sub-task in a chord and cannot be used here. String(36) is the UUID canonical format (8-4-4-4-12).
+
+**`Base` defined in `models.py`:** No separate `db/base.py` — one fewer file for the same outcome. `session.py` (Step 40) will import `Base` from `models.py`. `env.py` already does. No circular import risk.
+
+**SQLite in-memory for Step 39 tests:** No live Postgres needed for structural/round-trip verification. `conftest.py` with async fixtures comes in Step 41 alongside `crud.py`. Using SQLite now keeps Step 39 self-contained and runnable with no infrastructure dependencies.
+
+**`report_json: JSON` with denormalised score columns:** Full `StockReport` stored as JSON for complete retrieval. Scores and recommendation denormalised as typed columns for queries (`WHERE weighted_score > 7.0`, `WHERE recommendation = 'BUY'`) without JSON parsing overhead.
+
+### Test Coverage
+
+11 tests in `tests/test_db.py`, all passing:
+- Table names (`stock_reports`, `analysis_jobs`)
+- Column presence (all 9 + 6 columns verified)
+- Round-trip save/retrieve for both models
+- Score precision (`Decimal("7.5")` stored and retrieved as exact `Decimal("7.5")`)
+- Status transitions (`pending`, `running`, `complete`, `failed`)
+- `job_id` UNIQUE constraint (IntegrityError on duplicate)
+- `__repr__` output for both models
+
+### Self-Review
+
+```
+CORRECTNESS
+[✓] 11/11 tests pass — uv run pytest tests/test_db.py -v
+[N/A] No migration yet — autogenerate will run in Step 42 after session.py exists
+[✓] All expected columns present and verified by inspector
+[✓] Numeric(4,1) precision verified by round-trip Decimal assertion
+
+SAFETY
+[✓] No raw SQL
+[✓] No hardcoded secrets
+[✓] All NOT NULL columns either have server_default or are set in every test fixture
+
+COMPLETENESS
+[✓] Worklog session table updated to ✅ Done
+[✓] BACKEND.md Section 4 updated with model documentation
+[✓] Documentation flags written for Claude below
+[✓] COMMIT PROPOSAL block ready
+```
 
 ---
 

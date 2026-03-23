@@ -23,12 +23,15 @@ if config.config_file_name is not None:
 # Import settings to get DATABASE_URL at runtime — keeps secrets out of alembic.ini
 from stock_agent.config import settings  # noqa: E402
 
+# Import Base so Alembic can diff ORM models against the live schema (autogenerate).
+# This import also registers StockReportRecord and AnalysisJobRecord with Base.metadata.
+from stock_agent.db.models import Base  # noqa: E402
+
 # Inject the URL programmatically so Alembic uses settings, not alembic.ini
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
-# target_metadata: set to Base.metadata in Step 39 after ORM models are defined.
-# None here disables autogenerate — that is intentional until models exist.
-target_metadata = None
+# target_metadata points at our ORM model registry — enables alembic revision --autogenerate
+target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:

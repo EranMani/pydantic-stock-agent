@@ -189,13 +189,44 @@ record = result.scalar_one_or_none()
 
 The `AsyncSession` is created by the session factory in `db/session.py` and injected into FastAPI route handlers via dependency injection. It lives for the lifetime of one HTTP request.
 
+### The two ORM models (Step 39)
+
+**`StockReportRecord`** → `stock_reports` table
+
+Stores a completed analysis. Key decisions:
+- `report_json: JSON` — full `StockReport` serialised; source of truth
+- `fundamental_score / technical_score / weighted_score: Numeric(4, 1)` — **never `Float`**; `Numeric` stores exact decimals, `Float` introduces drift (7.1 → 7.09999...)
+- `ticker`, `recommendation` denormalised alongside the JSON for fast queries without parsing
+- `created_at: DateTime(timezone=True)` — always timezone-aware; `server_default=func.now()` set at the DB level
+
+**`AnalysisJobRecord`** → `analysis_jobs` table
+
+Tracks a Celery job lifecycle. Key decisions:
+- `job_id: String(36)` — the stable UUID shared between this record and the Redis progress key (`job:{job_id}:progress`); has a `UNIQUE` constraint
+- `status: String(20)` — values: `pending` → `running` → `complete` / `failed`
+- `updated_at` — carries `onupdate=func.now()` so it auto-updates on every `session.commit()` that touches this row
+
+### Why Numeric over Float for scores?
+
+```python
+# Float — imprecise, dangerous for financial data
+score: float = 7.1
+# stored in Postgres as 7.09999999999999964...
+
+# Numeric(4, 1) — exact
+score: Numeric = Decimal("7.1")
+# stored in Postgres as exactly 7.1
+```
+
+`Numeric(4, 1)` means: 4 total digits, 1 after the decimal point. Accepts `1.0` through `10.0` with zero drift.
+
 ### File structure (Phase 8)
 
 | File | Responsibility |
 |---|---|
-| `db/models.py` | ORM model definitions: `StockReportRecord`, `AnalysisJobRecord` |
-| `db/session.py` | Async engine, session factory, FastAPI `lifespan` hook |
-| `db/crud.py` | CRUD functions: `save_report()`, `get_report_by_ticker()`, `list_jobs()` |
+| `db/models.py` | ORM model definitions: `StockReportRecord`, `AnalysisJobRecord` ✅ Step 39 |
+| `db/session.py` | Async engine, session factory, FastAPI `lifespan` hook — Step 40 |
+| `db/crud.py` | CRUD functions: `save_report()`, `get_report_by_ticker()`, `list_jobs()` — Step 41 |
 
 ---
 
@@ -295,5 +326,7 @@ Backend-relevant entries in `DECISIONS.md`:
 | ID | Decision | Step |
 |---|---|---|
 | DEC-020 | Alembic reads `DATABASE_URL` from `Settings` at runtime, not from `alembic.ini` | 38 |
+| — | `Numeric(4, 1)` over `Float` for all score columns — prevents precision drift in Postgres | 39 |
+| — | `job_id: String(36)` on `AnalysisJobRecord` is the stable Redis/DB shared identifier — never Celery's `task_id` | 39 |
 
 *More entries will be added as Phases 8–10 are built.*
