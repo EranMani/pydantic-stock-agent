@@ -1,4 +1,4 @@
-"""Tests for SQLAlchemy ORM models.
+"""Tests for SQLAlchemy ORM models and session factory.
 
 Uses SQLite in-memory for structural and round-trip verification — no live
 PostgreSQL instance required. Integration tests against the real async session
@@ -10,6 +10,8 @@ Covers:
 - Round-trip save and retrieval (field values preserved)
 - Numeric score precision (Decimal, not float)
 - Uniqueness constraint on AnalysisJobRecord.job_id
+- Session factory produces AsyncSession instances
+- Engine is an AsyncEngine instance
 """
 
 from decimal import Decimal
@@ -17,13 +19,15 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import Session
 
 from stock_agent.db.models import AnalysisJobRecord, Base, StockReportRecord
+from stock_agent.db.session import async_session_factory, engine
 
 
 @pytest.fixture(scope="module")
-def engine():
+def sqlite_engine():
     """In-memory SQLite engine with all ORM tables created."""
     _engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(_engine)
@@ -32,9 +36,9 @@ def engine():
 
 
 @pytest.fixture
-def session(engine):
+def session(sqlite_engine):
     """Provide a clean session that rolls back after each test."""
-    with Session(engine) as _session:
+    with Session(sqlite_engine) as _session:
         yield _session
         _session.rollback()
 
@@ -54,9 +58,9 @@ def test_analysis_job_record_table_name():
     assert AnalysisJobRecord.__tablename__ == "analysis_jobs"
 
 
-def test_stock_report_record_columns(engine):
+def test_stock_report_record_columns(sqlite_engine):
     """stock_reports table has all expected columns."""
-    inspector = inspect(engine)
+    inspector = inspect(sqlite_engine)
     columns = {col["name"] for col in inspector.get_columns("stock_reports")}
     expected = {
         "id",
@@ -72,9 +76,9 @@ def test_stock_report_record_columns(engine):
     assert expected == columns
 
 
-def test_analysis_job_record_columns(engine):
+def test_analysis_job_record_columns(sqlite_engine):
     """analysis_jobs table has all expected columns."""
-    inspector = inspect(engine)
+    inspector = inspect(sqlite_engine)
     columns = {col["name"] for col in inspector.get_columns("analysis_jobs")}
     expected = {"id", "job_id", "ticker", "status", "created_at", "updated_at"}
     assert expected == columns
@@ -175,13 +179,13 @@ def test_analysis_job_record_status_transitions(session):
 # ---------------------------------------------------------------------------
 
 
-def test_analysis_job_record_job_id_unique(engine):
+def test_analysis_job_record_job_id_unique(sqlite_engine):
     """job_id must be unique — inserting a duplicate raises IntegrityError."""
-    with Session(engine) as s:
+    with Session(sqlite_engine) as s:
         s.add(AnalysisJobRecord(job_id="duplicate-id", ticker="AAPL", status="pending"))
         s.commit()
 
-    with Session(engine) as s:
+    with Session(sqlite_engine) as s:
         s.add(AnalysisJobRecord(job_id="duplicate-id", ticker="MSFT", status="pending"))
         with pytest.raises(IntegrityError):
             s.commit()
@@ -204,3 +208,20 @@ def test_analysis_job_record_repr():
     r = AnalysisJobRecord(job_id="abc-123", ticker="MSFT", status="running")
     assert "abc-123" in repr(r)
     assert "running" in repr(r)
+
+
+# ---------------------------------------------------------------------------
+# Session factory (Step 40)
+# ---------------------------------------------------------------------------
+
+
+def test_engine_is_async_engine():
+    """engine exported from session.py must be an AsyncEngine instance."""
+    assert isinstance(engine, AsyncEngine)
+
+
+@pytest.mark.anyio
+async def test_session_factory_produces_async_session():
+    """async_session_factory() must yield an AsyncSession instance."""
+    async with async_session_factory() as session:
+        assert isinstance(session, AsyncSession)

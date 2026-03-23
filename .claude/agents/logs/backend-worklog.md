@@ -9,6 +9,7 @@
 
 | Date | Task | Status | Key Decision |
 |---|---|---|---|
+| 2026-03-23 | Step 40 — async engine, session factory, FastAPI lifespan | ✅ Done | expire_on_commit=False required in async context — prevents lazy-load blocking the event loop after commit |
 | 2026-03-23 | Step 39 — define StockReportRecord and AnalysisJobRecord ORM models | ✅ Done | Numeric(4,1) over Float for score columns — exact decimal storage in Postgres |
 | 2026-03-23 | Step 38 — install sqlalchemy/alembic/asyncpg, configure DATABASE_URL, init migrations | ✅ Done | env.py reads DATABASE_URL from Settings at runtime — alembic.ini has no hardcoded URL |
 | 2026-03-22 | Identity verification — first commit as Rex | ✅ Done | No engineering decision — contributor identity test only |

@@ -12,17 +12,15 @@ Current endpoints:
                    Phase 9 replaces this with async Celery dispatch.
 
 Lifespan:
-  Placeholder until db/session.py is built in Step 40. At that point the
-  real async SQLAlchemy engine init and connection pool warm-up will replace
-  the no-op yield below.
+  Managed by db/session.py — creates the async engine on startup, disposes
+  the connection pool on shutdown. In development, auto-creates all tables.
 """
-
-from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from pydantic import BaseModel
 
 from stock_agent.agent import run_analysis
+from stock_agent.db.session import lifespan
 from stock_agent.models.context import ScoringStrategy
 from stock_agent.models.report import StockReport
 
@@ -32,19 +30,6 @@ class AnalyzeRequest(BaseModel):
 
     ticker: str
     strategy: ScoringStrategy = ScoringStrategy()
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """FastAPI lifespan hook — placeholder until db/session.py is built (Step 40).
-
-    Step 40 replaces this with the real async SQLAlchemy engine init and
-    connection pool warm-up. Keeping the hook wired here so the architecture
-    slot exists and the startup/shutdown pattern is established.
-    """
-    # STARTUP — nothing to initialise yet
-    yield
-    # SHUTDOWN — nothing to dispose yet
 
 
 app = FastAPI(title="Stock Agent API", lifespan=lifespan)
