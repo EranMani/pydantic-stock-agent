@@ -17,6 +17,8 @@ Scope: `src/stock_agent/db/`, `src/stock_agent/worker/`, `migrations/`, `config.
 6. [Celery — Background Workers](#6-celery--background-workers) *(Step 44+)*
 7. [Redis — Broker & State Whiteboard](#7-redis--broker--state-whiteboard) *(Step 44+)*
 8. [Design Decisions Index](#8-design-decisions-index)
+9. [Database Design Principles](#9-database-design-principles)
+10. [Testing the Database Layer](#10-testing-the-database-layer)
 
 ---
 
@@ -400,3 +402,97 @@ At any point the table answers operational questions:
 | `status = 'failed'` | Pipeline error — no report produced |
 
 After a crash: scan for `pending` / `running` rows and re-dispatch. The database is the recovery source — Redis is ephemeral and may not survive a restart.
+
+---
+
+## 10. Testing the Database Layer
+
+---
+
+### Why test ORM models at all?
+
+A model definition is a contract — "this table exists, these columns exist, these constraints hold." The Python code compiling successfully does not prove the contract is true. It only proves the syntax is valid.
+
+Tests are the proof that SQLAlchemy correctly translated your Python definitions into a real schema with the right shape, types, and behaviour. Without them, the only verification is "it looks right" — which is not acceptable for infrastructure that other systems depend on.
+
+**The core rule:** if a failure would be silent at definition time but catastrophic at runtime, there must be a test for it.
+
+---
+
+### Two test tiers
+
+**Tier 1 — SQLite in-memory (no infrastructure needed)**
+
+Used for structural and round-trip tests. SQLite spins up in milliseconds inside the test process — no Docker, no running Postgres required.
+
+```python
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+from stock_agent.db.models import Base
+
+engine = create_engine("sqlite:///:memory:")
+Base.metadata.create_all(engine)  # creates all tables in SQLite
+```
+
+Covers: table names, column presence, round-trip save/retrieve, type precision, constraints, `__repr__`.
+
+**Tier 2 — Async Postgres (requires Docker Compose)**
+
+Used for integration tests — real `AsyncSession`, real transactions, real CRUD functions. Added in Step 41 via `conftest.py` with an async test session fixture.
+
+Covers: async CRUD functions, transaction rollback, concurrent access, real Postgres type behaviour.
+
+---
+
+### What to test for every ORM model
+
+| What | Why |
+|---|---|
+| `__tablename__` value | A wrong table name means every query silently hits the wrong table |
+| All column names present | Catches missing or renamed columns before they cause runtime errors |
+| Round-trip save and retrieve | Proves the full persistence cycle works — not just that the class compiles |
+| Numeric/Decimal precision | `Float` would silently store `6.299999...` instead of `6.3` — must be verified |
+| NOT NULL constraints | Inserting without a required field should raise, not silently store NULL |
+| UNIQUE constraints | A duplicate insert must raise `IntegrityError` — proves the DB enforces it |
+| `__repr__` output | Debug output must include key identifiers — caught early, saves time later |
+
+---
+
+### How to run the tests
+
+```bash
+# Run only the database tests
+uv run pytest tests/test_db.py -v
+
+# Run only the worker tests
+uv run pytest tests/test_worker.py -v
+
+# Run both
+uv run pytest tests/test_db.py tests/test_worker.py -v
+
+# Run the full suite
+uv run pytest
+```
+
+The `-v` flag prints each test name and its pass/fail status individually — essential when diagnosing a failure.
+
+**Expected output for a clean run:**
+```
+tests/test_db.py::test_stock_report_record_table_name     PASSED
+tests/test_db.py::test_analysis_job_record_table_name     PASSED
+tests/test_db.py::test_stock_report_record_columns        PASSED
+...
+11 passed in 1.06s
+```
+
+---
+
+### The test file location contract
+
+| File | What it tests |
+|---|---|
+| `tests/test_db.py` | ORM models, session, CRUD — Rex owns this |
+| `tests/test_worker.py` | Celery tasks, Redis publish — Rex owns this |
+| `tests/conftest.py` | Shared fixtures (async session, mocked Redis) — added in Step 41 |
+
+Rex never touches `tests/test_fundamental.py`, `tests/test_technical.py`, or `tests/test_ui.py` — those are Claude's and Aria's domains.
