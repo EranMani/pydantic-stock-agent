@@ -191,6 +191,174 @@ record = result.scalar_one_or_none()
 
 The `AsyncSession` is created by the session factory in `db/session.py` and injected into FastAPI route handlers via dependency injection. It lives for the lifetime of one HTTP request.
 
+---
+
+### The Engine, Session Factory, and Lifespan (Step 40)
+
+Three components in `db/session.py` that form the ground rules of all database connectivity.
+
+---
+
+#### The AsyncEngine
+
+**One job: manage the connection pool.**
+
+The engine doesn't run queries or know about ORM models. It owns a pool of TCP sockets to Postgres and hands them out when sessions need them.
+
+```python
+engine = create_async_engine(
+    settings.DATABASE_URL,
+    pool_size=5,        # permanent connections, live for the server lifetime
+    max_overflow=10,    # temporary connections created during traffic spikes
+    pool_pre_ping=True, # health-check each connection before use
+)
+```
+
+**Connection pool — the waiter analogy:**
+
+| Setting | Meaning |
+|---|---|
+| `pool_size=5` | 5 permanent waiters, each with their own TCP socket to Postgres |
+| `max_overflow=10` | Up to 10 temporary waiters hired during a rush, fired when done |
+| Max concurrent connections | 5 + 10 = 15 |
+
+**Permanent vs temporary connections:**
+- **Permanent (pool_size)** — TCP socket opened lazily on first use, kept open for the server's lifetime. One handshake and authentication per waiter, done once.
+- **Temporary (overflow)** — TCP socket opened when all permanents are busy, closed immediately after the request finishes. Not returned to the pool.
+
+**`pool_pre_ping=True` — the shoulder tap:**
+A connection in the pool can go stale while idle — Postgres kills it after a timeout, a firewall drops the TCP socket, Postgres restarts. The pool doesn't know. Without pre-ping, a stale connection gets handed to a request and fails. With pre-ping, a cheap `SELECT 1` fires before every handout. If it fails, the connection is discarded and a fresh one opened — the request never sees the failure. The pre-ping fires only when a connection is pulled from the pool, not while idle.
+
+**When the engine is used directly (rare):**
+```python
+# dev startup — create tables
+async with engine.begin() as conn:
+    await conn.run_sync(Base.metadata.create_all)
+
+# shutdown — close all sockets
+await engine.dispose()
+
+# Alembic — run migrations (bypasses session layer)
+async with engine.begin() as conn:
+    await conn.run_sync(do_run_migrations)
+```
+
+In normal application code, you never touch the engine. You work with sessions.
+
+**Lazy vs eager connections:**
+- **Production** — pool starts empty. First connection opens on the first user request. Server starts fast and tolerates brief DB unavailability during deploys.
+- **Development** — lifespan runs `create_all` at startup, which opens the first connection immediately. Fails fast if `DATABASE_URL` is wrong or Postgres isn't running.
+
+---
+
+#### The Session Factory
+
+**One job: dispense `AsyncSession` instances.**
+
+```python
+async_session_factory = async_sessionmaker(
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+)
+```
+
+The session is your unit of work — one conversation with the database. It borrows a connection from the engine's pool, runs your queries, and returns the connection when done.
+
+**`expire_on_commit=False` — required in async context:**
+
+By default, SQLAlchemy expires all model attributes after `session.commit()`. The next attribute access triggers a lazy load — a new SQL query. In async context, that lazy load blocks the event loop and crashes:
+
+```python
+await session.commit()
+print(record.ticker)  # default: triggers lazy load → blocks event loop → error
+                       # expire_on_commit=False: reads from memory → safe
+```
+
+**Three ways sessions are used in this project:**
+
+| Context | How |
+|---|---|
+| HTTP request | `Depends(get_session)` — FastAPI injects automatically |
+| Celery task | `async with async_session_factory() as session:` — created manually |
+| Dev startup | `engine.begin()` directly — DDL only, bypasses session |
+
+---
+
+#### `get_session` — the FastAPI Dependency
+
+```python
+async def get_session() -> AsyncGenerator[AsyncSession, None]:
+    async with async_session_factory() as session:
+        yield session
+```
+
+`yield` is the key. It's not a traditional generator — it's a **dependency with cleanup**. FastAPI recognises the `yield` pattern and treats everything after it as teardown logic.
+
+**The execution flow:**
+```
+FastAPI calls get_session()
+→ session opens
+→ yield session    ← pauses here, hands session to the route handler
+→ route handler runs (session available throughout)
+→ handler finishes (success or exception)
+→ resumes after yield → async with closes session automatically
+→ connection returned to pool
+```
+
+The session stays open for the **entire request lifetime** — not just until the last query. It closes only when the route handler finishes. Cleanup is guaranteed regardless of exceptions — no manual `session.close()` needed anywhere.
+
+**Session lifetime = request lifetime.**
+
+---
+
+#### The Lifespan
+
+```python
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    # STARTUP
+    if settings.APP_ENV == "development":
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    yield
+    # SHUTDOWN
+    await engine.dispose()
+```
+
+Passed to `FastAPI(lifespan=lifespan)`. Runs startup before the server accepts any traffic, shutdown after the last request is handled.
+
+**Why it exists:**
+
+| Phase | What it does | Why |
+|---|---|---|
+| Startup (dev) | `create_all` — creates all tables | Tables must exist before requests arrive |
+| Startup (prod) | Nothing | Alembic already ran before server started |
+| Shutdown | `engine.dispose()` | Closes all TCP sockets cleanly; prevents connection leaks |
+
+**The complete server lifecycle:**
+```
+Server starts
+→ lifespan STARTUP: create tables (dev) or nothing (prod)
+→ yield: server accepts requests
+    → get_session opens/closes sessions per request
+    → engine hands out/reclaims connections from pool
+→ lifespan SHUTDOWN: engine.dispose() closes all sockets
+Server exits
+```
+
+---
+
+#### The Three-Layer Hierarchy
+
+```
+engine                     → owns TCP sockets to Postgres (pool)
+  └── async_session_factory → dispenses sessions bound to the engine
+        └── AsyncSession    → borrows one socket, runs queries, returns it
+```
+
+One engine per process. One factory per engine. Many sessions over time — one per request, one per Celery task, each short-lived and automatically cleaned up.
+
 ### The two ORM models (Step 39)
 
 **`StockReportRecord`** → `stock_reports` table
@@ -227,7 +395,7 @@ score: Numeric = Decimal("7.1")
 | File | Responsibility |
 |---|---|
 | `db/models.py` | ORM model definitions: `StockReportRecord`, `AnalysisJobRecord` ✅ Step 39 |
-| `db/session.py` | Async engine, session factory, FastAPI `lifespan` hook — Step 40 |
+| `db/session.py` | Async engine, session factory, FastAPI `lifespan` hook ✅ Step 40 |
 | `db/crud.py` | CRUD functions: `save_report()`, `get_report_by_ticker()`, `list_jobs()` — Step 41 |
 
 ---
@@ -330,6 +498,8 @@ Backend-relevant entries in `DECISIONS.md`:
 | DEC-020 | Alembic reads `DATABASE_URL` from `Settings` at runtime, not from `alembic.ini` | 38 |
 | — | `Numeric(4, 1)` over `Float` for all score columns — prevents precision drift in Postgres | 39 |
 | — | `job_id: String(36)` on `AnalysisJobRecord` is the stable Redis/DB shared identifier — never Celery's `task_id` | 39 |
+| — | `expire_on_commit=False` on session factory — prevents lazy-load blocking the async event loop after `commit()` | 40 |
+| — | `create_all` in dev mode only — production schema is always owned by Alembic, never by `metadata.create_all()` | 40 |
 
 *More entries will be added as Phases 8–10 are built.*
 
