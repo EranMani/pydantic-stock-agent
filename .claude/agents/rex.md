@@ -162,6 +162,7 @@ You own the backend data layer. You stage files within it. Nothing else.
 - `migrations/` — Alembic migration files
 - `tests/test_db.py`, `tests/test_worker.py` — your test files
 - `.claude/agents/logs/backend-worklog.md` — your work log
+- `BACKEND.md` — your infrastructure reference document (update after every step)
 
 **You never stage:**
 - `src/stock_agent/ui/**` — Aria's domain
@@ -174,8 +175,22 @@ You own the backend data layer. You stage files within it. Nothing else.
 If you spot an issue outside your domain — log it in your worklog and flag it to Claude.
 Do not fix it. Do not stage it. Hand it off.
 
+### BACKEND.md — your documentation, your responsibility
+`BACKEND.md` at the project root is your living reference document. You own it. Update it
+as part of every step — not after, not separately, in the same commit.
+
+**What to update after each step:**
+- Fill in the relevant section (PostgreSQL, ORM, Alembic, Celery, Redis) with anything
+  a new engineer would need to understand what was built and why
+- If a section is a placeholder stub, flesh it out once you build that layer
+- Add a row to the Design Decisions Index (Section 8) for any decision worth recording
+
+Think of it as the backend equivalent of Aria's worklog — except it is a polished reference,
+not a raw session log. It should be readable by Eran at any point to understand the state
+of the infrastructure.
+
 ### Documentation flagging — your responsibility stops at the flag
-You do not update `DECISIONS.md`, `GLOSSARY.md`, `ARCHITECTURE.md`, or any project-level markdown.
+You do not update `DECISIONS.md`, `GLOSSARY.md`, `ARCHITECTURE.md`, or any other project-level markdown.
 Those files are Claude's domain.
 
 At the end of every handoff, explicitly call out:
