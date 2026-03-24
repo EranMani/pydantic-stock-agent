@@ -50,6 +50,7 @@ Running record of design and concept questions discussed during development.
 | 40 | Why does `save_report` convert scores via `Decimal(str(round(score, 1)))` — why go through `str()`? | Database |
 | 41 | Why do FastAPI endpoints use separate Pydantic response schemas instead of returning ORM objects directly? | API / Database |
 | 42 | Why does `GET /jobs` return `200 + []` instead of `404` when there are no jobs? | API |
+| 43 | Why is the Celery instance created at module level as a singleton in `celery_app.py`? | Workers |
 
 ---
 
@@ -1111,6 +1112,30 @@ StockReportResponse.model_validate(orm_record)  # ✓
 ```
 
 *Step 43 — Rex.*
+
+---
+
+### Q: Why is the Celery instance created at module level as a singleton in `celery_app.py`?
+
+The `celery` object in `celery_app.py` is created once at module level and imported everywhere — tasks, the FastAPI app, the CLI. Three reasons this must be a singleton:
+
+**1. Single broker connection config**
+One place defines the broker URL, serialiser, and routing. If you change the broker URL, you change it once. If tasks and callers created their own `Celery()` instances, they might connect to different brokers — tasks enqueued by one instance would never be seen by workers connected to another.
+
+**2. Task registry**
+Celery's `@celery.task` decorator registers tasks against a specific `Celery` instance. If tasks and callers import from different instances, the task registry is split — `.delay()` calls would fail silently because the caller's instance doesn't know about the task registered on the worker's instance.
+
+**3. Process isolation is handled by the OS**
+Both the FastAPI process and the Celery worker process import the same `celery_app.py`, but they run in separate OS processes — each gets its own in-memory copy. There is no shared mutable state between processes. The singleton pattern is safe.
+
+```
+FastAPI process                  Celery worker process
+──────────────────               ─────────────────────
+import celery_app  →  celery     import celery_app  →  celery  (separate copy)
+task.delay()       →  broker  ←  worker.consume()
+```
+
+*Step 45 — raised by Eran during documentation review.*
 
 ---
 

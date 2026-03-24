@@ -623,6 +623,20 @@ All tasks under `stock_agent.worker.tasks.*` are routed to the `analysis` queue.
 **`CELERY_BROKER_URL` and `CELERY_RESULT_BACKEND` from `settings`:**
 Both are read from `config.py` settings (populated from `.env`). Nothing is hardcoded. In production, inject via environment variables. In Docker Compose, the broker points at `redis://redis:6379/0` and the backend at `redis://redis:6379/1` (separate Redis DB to avoid broker/result key collisions).
 
+**Why the Celery instance is a module-level singleton:**
+The `celery` object is created once at the top of `celery_app.py` and imported everywhere else — tasks, the API, the CLI. This is deliberate:
+
+- **Single broker connection config** — one place defines the broker URL, serialiser, and routing. If you change the broker URL, you change it once. No risk of two parts of the codebase connecting to different brokers.
+- **Task discovery** — Celery's `@celery.task` decorator registers tasks against a specific `Celery` instance. If tasks and callers import from different instances, the task registry is split and `.delay()` calls fail silently.
+- **Process isolation is handled by the OS, not Python** — the FastAPI process and the Celery worker process both import the same `celery_app.py` module, but they run in separate OS processes. Each gets its own copy of the object in memory. There is no shared mutable state between them — the singleton pattern is safe across process boundaries.
+
+```
+FastAPI process                  Celery worker process
+──────────────────               ─────────────────────
+import celery_app  →  celery     import celery_app  →  celery  (separate copy)
+task.delay()       →  broker  ←  worker.consume()
+```
+
 **Async boundary — important for all future tasks:**
 Celery does NOT support `async def` task bodies. Every task in `tasks.py` MUST be defined as `def` (synchronous). Async pipeline work is delegated to a private `async def _async_*()` helper called via `asyncio.run()`. This is a non-negotiable rule from CLAUDE.md.
 
