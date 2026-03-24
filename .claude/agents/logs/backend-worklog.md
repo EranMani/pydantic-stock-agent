@@ -9,11 +9,67 @@
 
 | Date | Task | Status | Key Decision |
 |---|---|---|---|
+| 2026-03-24 | Step 42 — async CRUD operations: create_job, update_job_status, save_report, get_report_by_ticker, list_recent_jobs | ✅ Done | save_report denormalises score columns alongside report_json for fast querying without JSON parsing |
 | 2026-03-23 | Step 41 — first Alembic migration: create stock_reports and analysis_jobs tables | ✅ Done | Port conflict: native Windows Postgres on 5432 intercepted Docker; moved container to 5433 for migration run |
 | 2026-03-23 | Step 40 — async engine, session factory, FastAPI lifespan | ✅ Done | expire_on_commit=False required in async context — prevents lazy-load blocking the event loop after commit |
 | 2026-03-23 | Step 39 — define StockReportRecord and AnalysisJobRecord ORM models | ✅ Done | Numeric(4,1) over Float for score columns — exact decimal storage in Postgres |
 | 2026-03-23 | Step 38 — install sqlalchemy/alembic/asyncpg, configure DATABASE_URL, init migrations | ✅ Done | env.py reads DATABASE_URL from Settings at runtime — alembic.ini has no hardcoded URL |
 | 2026-03-22 | Identity verification — first commit as Rex | ✅ Done | No engineering decision — contributor identity test only |
+
+---
+
+## 2026-03-24 — Step 42: Async CRUD Operations
+
+### Task Brief
+Implement five async CRUD functions in `src/stock_agent/db/crud.py` covering the full job and report lifecycle.
+
+Files affected:
+- `src/stock_agent/db/crud.py` — created (112 lines, five functions)
+- `tests/test_db.py` — extended (15 new async CRUD tests, 28 total)
+- `pyproject.toml` — added `aiosqlite`, `pytest-asyncio`; set `asyncio_mode = auto`
+- `uv.lock` — updated
+
+### Decisions
+
+**`expire_on_commit=False` + explicit `db.refresh()`:** The async session is configured with `expire_on_commit=False` to prevent lazy-load blocking after commit. `db.refresh()` is called explicitly after every `commit()` in write functions — this pulls server-generated values (`created_at`, `updated_at`) back into the in-memory object before returning it to the caller. Without `refresh()`, timestamp fields would be `None` on the returned object.
+
+**`save_report` denormalises score columns:** The full `StockReport` is stored as JSON via `model_dump(mode="json")` — complete fidelity, no data loss. The three score fields and `recommendation` are also stored as dedicated `Numeric(4,1)` and `String` columns. This allows the API and UI to query, sort, and filter by score without deserialising the JSON blob on every row.
+
+**`Decimal(str(round(score, 1)))` for score precision:** Pydantic `float` fields are converted to `Decimal` via `str()` intermediary to avoid IEEE 754 binary fraction drift. `round(..., 1)` enforces the `Numeric(4,1)` scale contract before insert.
+
+**`job_id` accepted but unused in `save_report`:** `StockReportRecord` has no `job_id` column — the FK link between the two tables is missing. Eran identified this during Step 42 review. Logged as TASK-010: add `ForeignKey("analysis_jobs.job_id")` + `relationship()` on both models + new Alembic migration. Deferred to before Step 43.
+
+**In-memory SQLite for tests:** `aiosqlite` provides an async SQLite engine for the test suite — no live Postgres needed. All five CRUD functions tested in isolation with a fresh in-memory DB per test via `AsyncSession` fixture.
+
+### Test Coverage
+
+15 new async tests (28 total), all passing:
+- `create_job`: row persisted, `job_id` and `ticker` correct, status `"pending"`, `created_at` populated
+- `update_job_status`: transitions to `running`, `complete`, `failed`; no-op on unknown `job_id`
+- `save_report`: row persisted, all score columns exact, `report_json` round-trips correctly
+- `get_report_by_ticker`: returns most recent report; returns `None` for unknown ticker
+- `list_recent_jobs`: returns correct count, ordered newest first; respects `limit` parameter
+
+### Self-Review
+
+```
+CORRECTNESS
+[✓] 28/28 tests pass — uv run pytest tests/test_db.py -q
+[N/A] No migration in this step — TASK-010 covers the missing FK
+[✓] All five functions return correct types with populated server-generated fields
+[✓] Score precision verified by Decimal round-trip assertion
+
+SAFETY
+[✓] No raw SQL — all queries via SQLAlchemy ORM select() / session.add()
+[✓] No async def on Celery task functions — N/A for this step (CRUD only)
+[✓] No hardcoded secrets
+[✓] All NOT NULL columns populated in every test fixture
+
+COMPLETENESS
+[✓] Worklog session table updated to ✅ Done
+[✓] TASK-010 logged for missing FK (Eran identified during review)
+[✓] COMMIT PROPOSAL delivered and committed
+```
 
 ---
 

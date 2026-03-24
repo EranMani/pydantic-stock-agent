@@ -396,7 +396,55 @@ score: Numeric = Decimal("7.1")
 |---|---|
 | `db/models.py` | ORM model definitions: `StockReportRecord`, `AnalysisJobRecord` ✅ Step 39 |
 | `db/session.py` | Async engine, session factory, FastAPI `lifespan` hook ✅ Step 40 |
-| `db/crud.py` | CRUD functions: `save_report()`, `get_report_by_ticker()`, `list_jobs()` — Step 41 |
+| `db/crud.py` | CRUD functions: `create_job()`, `update_job_status()`, `save_report()`, `get_report_by_ticker()`, `list_recent_jobs()` ✅ Step 42 |
+
+---
+
+## 4b. CRUD Layer — `db/crud.py` (Step 42)
+
+Five async functions that cover the full job and report lifecycle. All accept an injected `AsyncSession` — sessions are never created inside CRUD functions. All queries use SQLAlchemy ORM exclusively — no raw SQL.
+
+### The five functions
+
+| Function | Returns | Purpose |
+|---|---|---|
+| `create_job(db, ticker)` | `AnalysisJobRecord` | Insert a new job row with status `"pending"`. Generates the stable `job_id` UUID used by both the DB record and the Redis progress key. |
+| `update_job_status(db, job_id, status)` | `None` | Transition a job to `running`, `complete`, or `failed`. Silent no-op if the job doesn't exist. |
+| `save_report(db, job_id, report)` | `StockReportRecord` | Persist a completed `StockReport`. Stores the full report as JSON and denormalises score columns for fast querying (see below). |
+| `get_report_by_ticker(db, ticker)` | `StockReportRecord \| None` | Fetch the most recent report for a ticker, ordered by `created_at DESC`. Returns `None` if none exists. |
+| `list_recent_jobs(db, limit=20)` | `list[AnalysisJobRecord]` | Return the N most recent job rows, newest first. Feeds the NiceGUI job history panel. |
+
+### `db.refresh()` — why it is called after every commit
+
+After `db.add()` + `await db.commit()`, PostgreSQL has the complete row including all server-generated values (`created_at`, `updated_at`). The in-memory Python object is still in the state it was constructed — timestamp fields are `None`. `await db.refresh(obj)` fires a `SELECT` on that specific row and overwrites the in-memory object with whatever PostgreSQL actually stored. After `refresh()`, the Python object is a true mirror of the DB row.
+
+```python
+db.add(job)              # Python object: job_id=✓, created_at=None
+await db.commit()        # PostgreSQL row: job_id=✓, created_at=2026-03-24 11:32:00
+await db.refresh(job)    # Python object: job_id=✓, created_at=2026-03-24 11:32:00 ✓
+return job               # caller receives a fully populated object
+```
+
+Without `refresh()`, the caller would access `job.created_at` and get `None`. The session is configured with `expire_on_commit=False` (see Section 4), but that only prevents lazy-load crashes — it does not populate server-generated values. `refresh()` is still required for that.
+
+### Denormalized score columns in `save_report`
+
+`StockReportRecord` stores two representations of the report:
+
+1. **`report_json`** — the full `StockReport` serialised via `model_dump(mode="json")`. Source of truth. Nothing is lost.
+2. **`fundamental_score`, `technical_score`, `weighted_score`, `recommendation`** — typed columns copied from the report at insert time.
+
+The dedicated columns exist so the API and UI can query, sort, and filter by score without deserialising the JSON blob on every row:
+
+```sql
+-- Fast — hits an indexed Numeric column
+SELECT * FROM stock_reports WHERE weighted_score > 7.0 ORDER BY weighted_score DESC;
+
+-- Slow alternative — requires JSON parsing per row
+SELECT * FROM stock_reports WHERE report_json->>'weighted_score' > '7.0';
+```
+
+Scores are stored as `Decimal` via `Decimal(str(round(score, 1)))` to preserve `Numeric(4,1)` precision — float-to-Decimal conversion goes through `str()` to avoid IEEE 754 binary fraction drift.
 
 ---
 
@@ -608,7 +656,7 @@ Covers: table names, column presence, round-trip save/retrieve, type precision, 
 
 **Tier 2 — Async Postgres (requires Docker Compose)**
 
-Used for integration tests — real `AsyncSession`, real transactions, real CRUD functions. Added in Step 41 via `conftest.py` with an async test session fixture.
+Used for integration tests — real `AsyncSession`, real transactions, real CRUD functions. Added in Step 42 via `conftest.py` with an async test session fixture.
 
 Covers: async CRUD functions, transaction rollback, concurrent access, real Postgres type behaviour.
 
@@ -663,6 +711,6 @@ tests/test_db.py::test_stock_report_record_columns        PASSED
 |---|---|
 | `tests/test_db.py` | ORM models, session, CRUD — Rex owns this |
 | `tests/test_worker.py` | Celery tasks, Redis publish — Rex owns this |
-| `tests/conftest.py` | Shared fixtures (async session, mocked Redis) — added in Step 41 |
+| `tests/conftest.py` | Shared fixtures (async session, mocked Redis) — added in Step 42 |
 
 Rex never touches `tests/test_fundamental.py`, `tests/test_technical.py`, or `tests/test_ui.py` — those are Claude's and Aria's domains.

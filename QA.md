@@ -43,6 +43,8 @@ Running record of design and concept questions discussed during development.
 | 33 | What should the frontend display when `pe_ratio` is `None`? | UI |
 | 34 | Why is `main.py` inside `src/stock_agent/` instead of the project root? | Project Structure |
 | 35 | Is there a size limit on `CLAUDE.md`? When should it be split? | Project Structure |
+| 36 | Why is `db.refresh()` called after every commit in the CRUD layer? | Database |
+| 37 | Why does `save_report` store scores in both `report_json` and dedicated columns? | Database |
 
 ---
 
@@ -969,3 +971,38 @@ That said, the practical guideline is **~250 lines** — beyond that, the file b
 The commit protocol already uses this pattern (`@.claude/commit-protocol.md`).
 
 *Raised by Eran during Step 28 — noted as a maintenance concern to keep an eye on as new rules are added.*
+
+---
+
+## Phase 8 — Database Layer
+
+### Q: Why is `db.refresh()` called after every commit in the CRUD layer?
+
+After `db.add()` + `await db.commit()`, PostgreSQL has the complete row including all server-generated values (`created_at`, `updated_at`). The in-memory Python object is still in the state it was constructed — timestamp fields are `None`.
+
+`await db.refresh(obj)` fires a `SELECT` on that specific row and re-populates the Python object with whatever PostgreSQL actually stored. It acts as a **pull from DB → sync to memory** — after `refresh()`, the Python object is a true mirror of the DB row, including timestamps.
+
+```python
+db.add(job)              # Python: job_id=✓, created_at=None
+await db.commit()        # Postgres: job_id=✓, created_at=2026-03-24 11:32:00
+await db.refresh(job)    # Python: job_id=✓, created_at=2026-03-24 11:32:00 ✓
+```
+
+The session uses `expire_on_commit=False` to prevent lazy-load crashes, but that does not populate server-generated values — `refresh()` is still required for that. Without it, callers would receive an object with `None` timestamps.
+
+*Raised by Eran during Step 42 review.*
+
+---
+
+### Q: Why does `save_report` store scores in both `report_json` and dedicated columns?
+
+`StockReportRecord` stores two representations of the same report:
+
+1. **`report_json`** — the full `StockReport` serialised via `model_dump(mode="json")`. Source of truth, nothing is lost.
+2. **`fundamental_score`, `technical_score`, `weighted_score`, `recommendation`** — typed columns copied from the report at insert time.
+
+The dedicated columns exist so the API and UI can query, sort, and filter by score without deserialising the JSON blob on every row. A `WHERE weighted_score > 7.0` query hits an indexed `Numeric(4,1)` column directly — fast and type-safe. Parsing `report_json` for the same value would require a JSON extraction expression on every row.
+
+This is a standard **denormalization** pattern: accept a small amount of data duplication at write time in exchange for significantly faster and simpler reads.
+
+*Raised by Eran during Step 42 review.*
