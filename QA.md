@@ -45,6 +45,7 @@ Running record of design and concept questions discussed during development.
 | 35 | Is there a size limit on `CLAUDE.md`? When should it be split? | Project Structure |
 | 36 | Why is `db.refresh()` called after every commit in the CRUD layer? | Database |
 | 37 | Why does `save_report` store scores in both `report_json` and dedicated columns? | Database |
+| 38 | Why do we have a dedicated CRUD layer instead of writing DB calls inline? | Database |
 
 ---
 
@@ -994,7 +995,25 @@ The session uses `expire_on_commit=False` to prevent lazy-load crashes, but that
 
 ---
 
-### Q: Why does `save_report` store scores in both `report_json` and dedicated columns?
+### Q: Why do we have a dedicated CRUD layer instead of writing DB calls inline?
+
+Three reasons: **separation of concerns**, **session ownership**, and **testability**.
+
+**Separation of concerns:** FastAPI route handlers, Celery tasks, and the NiceGUI layer all need to read and write data, but none of them should know *how* data is stored. If we ever change the schema, add caching, or switch a query strategy, we change it in one place — `crud.py` — and every caller gets the fix automatically. Writing `session.execute(select(...))` directly in a route handler couples the HTTP layer to the storage implementation.
+
+**Session ownership:** The CRUD functions accept an injected `AsyncSession` — they never create one themselves. This means the *caller* controls the transaction boundary. A FastAPI route can wrap multiple CRUD calls in a single session (one DB connection for the whole request). A Celery task does the same. If CRUD functions created their own sessions internally, each call would open and close its own connection — wasteful, and impossible to group into a single transaction.
+
+**Testability:** Because CRUD functions are pure async functions that take a session and return data, they can be tested in complete isolation with an in-memory SQLite session — no HTTP server, no Celery worker, no live Postgres required. Testing a route handler that has DB calls baked in requires spinning up the full stack.
+
+```
+FastAPI route  ─┐
+Celery task    ─┼─→  crud.py  →  AsyncSession  →  PostgreSQL
+NiceGUI panel  ─┘
+```
+
+Each caller passes in its own session. `crud.py` is the only layer that knows SQL.
+
+*Raised during Step 42 documentation review.* in both `report_json` and dedicated columns?
 
 `StockReportRecord` stores two representations of the same report:
 
