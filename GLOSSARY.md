@@ -534,6 +534,53 @@ SELECT * FROM stock_reports WHERE weighted_score > 8.0 AND recommendation = 'BUY
 
 ---
 
+### `from_attributes` (Pydantic v2)
+Pydantic v2 model config option that enables `model_validate()` to read from Python object attributes rather than dict keys. Required when populating a Pydantic model from a SQLAlchemy ORM instance.
+
+```python
+class StockReportResponse(BaseModel):
+    model_config = {"from_attributes": True}
+    ticker: str
+    weighted_score: Decimal
+
+# Without from_attributes — raises ValidationError (ORM object is not a dict)
+# With from_attributes  — reads .ticker, .weighted_score directly from ORM object
+StockReportResponse.model_validate(orm_record)  # ✓
+```
+
+This is the Pydantic v2 replacement for v1's `orm_mode = True`. Used in `StockReportResponse` and `AnalysisJobResponse` to enable direct ORM-to-Pydantic serialisation in the Step 43 HTTP endpoints.
+
+---
+
+### `ASGITransport` (httpx)
+An `httpx` transport that drives an ASGI app (such as FastAPI) directly in-process without a real HTTP server or network port. Used in `tests/test_api.py` to call FastAPI route handlers in async tests without spinning up `uvicorn`.
+
+```python
+async with httpx.AsyncClient(
+    transport=httpx.ASGITransport(app=app),
+    base_url="http://test"
+) as client:
+    response = await client.get("/reports/AAPL")
+```
+
+The test runs in the same event loop as the app — no thread, no port, no infrastructure.
+
+---
+
+### `dependency_overrides` (FastAPI)
+FastAPI's built-in mechanism for swapping `Depends(...)` targets at test time. Installed before a test and removed after, leaving the app clean between runs.
+
+```python
+# Replace get_session with a test session factory
+app.dependency_overrides[get_session] = override_get_session
+# ... run test ...
+app.dependency_overrides.pop(get_session)
+```
+
+Used in `tests/test_api.py` to inject the in-memory SQLite session into route handlers during tests — exercises the full `Depends(get_session)` injection path without touching a real database.
+
+---
+
 ### `aiosqlite` — async SQLite driver for testing
 A Python package that provides an async interface to SQLite, compatible with SQLAlchemy's `AsyncSession`. Used exclusively in the test suite via `sqlite+aiosqlite:///:memory:`.
 

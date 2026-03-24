@@ -397,6 +397,62 @@ score: Numeric = Decimal("7.1")
 | `db/models.py` | ORM model definitions: `StockReportRecord`, `AnalysisJobRecord` ✅ Step 39 |
 | `db/session.py` | Async engine, session factory, FastAPI `lifespan` hook ✅ Step 40 |
 | `db/crud.py` | CRUD functions: `create_job()`, `update_job_status()`, `save_report()`, `get_report_by_ticker()`, `list_recent_jobs()` ✅ Step 42 |
+| `api.py` | FastAPI app: `POST /analyze`, `GET /reports/{ticker}`, `GET /jobs` + Pydantic response schemas ✅ Step 43 |
+
+---
+
+## 4c. HTTP Endpoints — `api.py` (Step 43)
+
+Step 43 added two read endpoints to `api.py` that expose the CRUD layer over HTTP. Neither endpoint performs any database writes — they are pure reads.
+
+### Endpoint contracts
+
+**`GET /reports/{ticker}`**
+
+| Field | Detail |
+|---|---|
+| Method | `GET` |
+| Path parameter | `ticker: str` — the stock ticker symbol (case-insensitive) |
+| DB session | Injected via `Depends(get_session)` |
+| CRUD call | `get_report_by_ticker(db, ticker)` |
+| Success | `200 OK` + `StockReportResponse` JSON body |
+| Not found | `404 Not Found` + `{"detail": "No report found for ticker 'XYZ'"}` |
+
+`StockReportResponse` fields:
+- `id` — surrogate primary key (int)
+- `ticker` — normalised to uppercase
+- `company_name` — resolved at analysis time
+- `report_json` — full `StockReport` serialised as JSON (source of truth for all report fields)
+- `fundamental_score`, `technical_score`, `weighted_score` — `Decimal` (exact, not float)
+- `recommendation` — `"BUY"`, `"WATCH"`, or `"AVOID"`
+- `created_at` — UTC ISO 8601 timestamp
+
+**`GET /jobs`**
+
+| Field | Detail |
+|---|---|
+| Method | `GET` |
+| Query parameter | `limit: int = 20` — how many rows to return (default 20) |
+| DB session | Injected via `Depends(get_session)` |
+| CRUD call | `list_recent_jobs(db, limit)` |
+| Success | `200 OK` + `list[AnalysisJobResponse]` JSON body |
+| Empty | `200 OK` + `[]` — an empty history is not an error |
+
+`AnalysisJobResponse` fields:
+- `id` — surrogate primary key (int)
+- `job_id` — stable UUID string (8-4-4-4-12), shared with the Redis progress key
+- `ticker` — normalised to uppercase
+- `status` — `"pending"` | `"running"` | `"complete"` | `"failed"`
+- `created_at` — UTC ISO 8601 timestamp
+- `updated_at` — UTC ISO 8601 timestamp of last status transition
+
+### Response schema design decisions
+
+**`model_config = {"from_attributes": True}`** — both response models use Pydantic v2's `from_attributes` mode. Without it, `model_validate(orm_record)` would raise a validation error because SQLAlchemy ORM objects are not dicts. `from_attributes=True` tells Pydantic to read from object attributes instead of dict keys — enabling direct ORM-to-Pydantic serialisation with no intermediate mapping step.
+
+**Separate response schemas, not raw ORM objects** — returning the ORM object directly via `response_model=StockReportRecord` would expose SQLAlchemy internals, make the response shape undefined, and break if the ORM model changes. Explicit response schemas decouple the HTTP contract from the storage model.
+
+**`Decimal` for score fields** — scores are stored as `Numeric(4,1)` in Postgres and come back as `Decimal` from SQLAlchemy. The response schema keeps them as `Decimal` to preserve the one-decimal-place contract across the full HTTP round-trip. JSON serialises them as numbers.
 
 ---
 

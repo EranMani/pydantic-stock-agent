@@ -9,12 +9,81 @@
 
 | Date | Task | Status | Key Decision |
 |---|---|---|---|
+| 2026-03-24 | Step 43 — GET /reports/{ticker} and GET /jobs FastAPI endpoints + response schemas + tests/test_api.py | ✅ Done | `from_attributes=True` on response schemas enables direct ORM-to-Pydantic serialisation without an intermediate dict mapping |
 | 2026-03-24 | Step 42 — async CRUD operations: create_job, update_job_status, save_report, get_report_by_ticker, list_recent_jobs | ✅ Done | save_report denormalises score columns alongside report_json for fast querying without JSON parsing |
 | 2026-03-23 | Step 41 — first Alembic migration: create stock_reports and analysis_jobs tables | ✅ Done | Port conflict: native Windows Postgres on 5432 intercepted Docker; moved container to 5433 for migration run |
 | 2026-03-23 | Step 40 — async engine, session factory, FastAPI lifespan | ✅ Done | expire_on_commit=False required in async context — prevents lazy-load blocking the event loop after commit |
 | 2026-03-23 | Step 39 — define StockReportRecord and AnalysisJobRecord ORM models | ✅ Done | Numeric(4,1) over Float for score columns — exact decimal storage in Postgres |
 | 2026-03-23 | Step 38 — install sqlalchemy/alembic/asyncpg, configure DATABASE_URL, init migrations | ✅ Done | env.py reads DATABASE_URL from Settings at runtime — alembic.ini has no hardcoded URL |
 | 2026-03-22 | Identity verification — first commit as Rex | ✅ Done | No engineering decision — contributor identity test only |
+
+---
+
+## 2026-03-24 — Step 43: GET /reports/{ticker} and GET /jobs FastAPI Endpoints
+
+### Task Brief
+
+Add two read endpoints to `src/stock_agent/api.py` backed by the CRUD functions from Step 42.
+Define explicit Pydantic response schemas — no raw ORM objects over the wire.
+Write `tests/test_api.py` with 8 tests covering both endpoints: happy paths, 404, empty list, limit param.
+
+Files affected:
+- `src/stock_agent/api.py` — two new endpoints + two response schemas + updated module docstring
+- `tests/test_api.py` — created (8 async tests via httpx.AsyncClient + dependency override)
+- `BACKEND.md` — new Section 4c documenting endpoint contracts and response schema decisions
+
+### Decisions
+
+**`from_attributes=True` on response schemas:** Pydantic v2 requires this on any model that will be populated from an ORM object via `model_validate()`. Without it, `model_validate(orm_record)` raises a `ValidationError` because SQLAlchemy ORM instances are not dicts — Pydantic's default mode is dict-access-only. `from_attributes=True` switches it to attribute access. This is the v2 equivalent of v1's `orm_mode = True`.
+
+**Separate `StockReportResponse` and `AnalysisJobResponse` schemas:** Returning the raw SQLAlchemy ORM objects as `response_model` would expose SQLAlchemy internals to the HTTP layer and create a hard coupling between storage shape and API contract. Explicit response schemas give us control: we can evolve the ORM model without breaking the API contract and vice versa.
+
+**`Decimal` kept in response schemas (not converted to `float`):** Scores are `Numeric(4,1)` in Postgres → `Decimal` in Python → serialised as exact numbers in JSON. Converting to `float` here would re-introduce IEEE 754 drift for no benefit. Pydantic serialises `Decimal` to JSON as a numeric type, which is what all callers expect.
+
+**`GET /jobs` returns `200 + []`, never `404`:** An empty job history is a valid state — the server is up, the database is up, there are just no jobs yet. `404` would mislead clients into thinking the endpoint doesn't exist. The pattern is consistent with REST conventions: collection endpoints return empty lists for empty collections.
+
+**Test strategy — dependency override via `app.dependency_overrides`:** FastAPI's built-in dependency override mechanism replaces `get_session` with a function that yields the test's in-memory SQLite session. This is the correct approach — it exercises the full route handler code (including the `Depends(get_session)` injection) without touching a real database. The override is installed before each test and torn down after, leaving the app clean between tests.
+
+**`httpx.AsyncClient` + `ASGITransport`:** FastAPI's `TestClient` is synchronous (wraps httpx in a thread). Since all our tests and fixtures are `async`, `AsyncClient` with `ASGITransport` is the right tool — it drives the ASGI app directly in the same event loop as the test, no extra thread or port needed.
+
+**Domain boundary note:** `api.py` is Claude's domain per `rex.md`. This step was explicitly assigned to Rex by the Step 43 protocol — the commit protocol overrides the domain boundary when it explicitly names the file. Flagged in the handoff note for Claude's awareness.
+
+### Test Coverage
+
+8 tests in `tests/test_api.py`, all passing (36 total across test_db.py + test_api.py):
+
+- `test_get_report_returns_200_with_correct_fields` — seeds a report, verifies all response fields
+- `test_get_report_ticker_case_insensitive` — lowercase ticker in URL resolves to uppercase record
+- `test_get_report_returns_404_when_not_found` — unknown ticker → 404 + detail message containing the ticker
+- `test_get_report_returns_latest_when_multiple_exist` — two seeded reports → one is returned, not 500
+- `test_get_jobs_returns_200_with_correct_fields` — seeds a job, verifies all response fields
+- `test_get_jobs_returns_empty_list_when_no_jobs` — no jobs → 200 + `[]` (not 404)
+- `test_get_jobs_respects_limit_query_param` — 5 seeded jobs, limit=3 → exactly 3 returned
+- `test_get_jobs_returns_all_within_default_limit` — 3 seeded jobs, default limit → all 3 returned
+
+### Self-Review
+
+```
+CORRECTNESS
+[✓] 8/8 new tests pass — uv run pytest tests/test_api.py -q
+[✓] 36/36 tests pass across test_db.py + test_api.py — no regressions
+[✓] Both endpoints return correct status codes (200, 404)
+[✓] Response schemas correctly use from_attributes=True — ORM objects serialise cleanly
+[✓] Decimal scores preserved in response — no float conversion
+
+SAFETY
+[✓] No raw SQL — all DB access goes through CRUD functions → SQLAlchemy ORM
+[✓] No async def on Celery tasks — N/A for this step (HTTP only)
+[✓] No hardcoded secrets or ticker symbols
+[✓] Dependency override cleanly removed after each test via app.dependency_overrides.pop()
+
+COMPLETENESS
+[✓] Worklog session table updated to ✅ Done
+[✓] BACKEND.md Section 4c added — endpoint contracts, response schema decisions
+[✓] File structure table in BACKEND.md Section 4 updated with api.py row
+[✓] Handoff note written for Claude — domain boundary and documentation flags
+[✓] COMMIT PROPOSAL block ready
+```
 
 ---
 

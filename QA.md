@@ -48,6 +48,8 @@ Running record of design and concept questions discussed during development.
 | 38 | Why do we have a dedicated CRUD layer instead of writing DB calls inline? | Database |
 | 39 | What is `aiosqlite` and why does it eliminate the need for Docker in DB tests? | Database / Testing |
 | 40 | Why does `save_report` convert scores via `Decimal(str(round(score, 1)))` — why go through `str()`? | Database |
+| 41 | Why do FastAPI endpoints use separate Pydantic response schemas instead of returning ORM objects directly? | API / Database |
+| 42 | Why does `GET /jobs` return `200 + []` instead of `404` when there are no jobs? | API |
 
 ---
 
@@ -1082,3 +1084,46 @@ engine = create_async_engine("sqlite+aiosqlite:///:memory:")
 **The trade-off:** SQLite and PostgreSQL are not identical. `Numeric(4,1)` precision, `DateTime(timezone=True)`, and `UNIQUE` constraints all behave slightly differently. For structural and CRUD unit tests this is fine — the differences don't affect the logic being tested. For migration testing and type-precision verification, a real Postgres instance (Tier 2 testing) is still needed.
 
 *Raised by Eran during Step 42 documentation review.*
+
+---
+
+## Phase 8 — HTTP Layer (Step 43)
+
+### Q: Why do FastAPI endpoints use separate Pydantic response schemas instead of returning ORM objects directly?
+
+Returning the raw SQLAlchemy ORM object as the `response_model` would expose the storage model directly over HTTP. This creates two problems:
+
+1. **Tight coupling** — if the ORM model changes (column renamed, field added), the API contract changes too, potentially breaking clients.
+2. **Undefined shape** — SQLAlchemy ORM objects carry internal state (`_sa_instance_state`, lazy-loaded relationships) that is not serialisable. FastAPI would either crash or produce unexpected output.
+
+Explicit response schemas (`StockReportResponse`, `AnalysisJobResponse`) give full control over the HTTP contract — the ORM model and API shape can evolve independently. `model_config = {"from_attributes": True}` enables `model_validate(orm_record)` to read directly from ORM object attributes without an intermediate dict mapping.
+
+```python
+# Without from_attributes=True — raises ValidationError
+StockReportResponse.model_validate(orm_record)  # ORM object is not a dict
+
+# With from_attributes=True — reads attributes directly
+class StockReportResponse(BaseModel):
+    model_config = {"from_attributes": True}
+    ticker: str
+    ...
+StockReportResponse.model_validate(orm_record)  # ✓
+```
+
+*Step 43 — Rex.*
+
+---
+
+### Q: Why does `GET /jobs` return `200 + []` instead of `404` when there are no jobs?
+
+`404 Not Found` means the **resource does not exist** — the endpoint itself, not its contents. A collection endpoint like `GET /jobs` always exists; it just happens to have zero items. Returning `404` for an empty list would mislead clients into thinking the route doesn't exist, causing them to handle an empty state the same way as a missing route.
+
+The correct REST convention: collection endpoints return `200 + []` for empty collections. `404` is reserved for single-resource endpoints (`GET /reports/{ticker}`) where the specific resource genuinely does not exist.
+
+```
+GET /jobs          → 200 + []           (valid — no jobs yet)
+GET /reports/AAPL  → 404                (valid — no report for this ticker)
+GET /reports/AAPL  → 200 + {...}        (valid — report found)
+```
+
+*Step 43 — Rex.*

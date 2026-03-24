@@ -225,6 +225,28 @@ This log is evidence of genuine human-AI collaboration — Eran (engineer) and C
 
 ---
 
+## DEC-024 — Separate Pydantic response schemas over raw ORM objects in HTTP endpoints
+**Raised by:** Rex during Step 43 implementation
+**Context:** FastAPI can accept SQLAlchemy ORM models directly as `response_model`. This avoids defining extra classes.
+**Options considered:**
+- Return raw ORM objects — fewer classes; but SQLAlchemy ORM instances carry internal state (`_sa_instance_state`) that is not serialisable, creating an undefined and fragile HTTP contract tightly coupled to the storage model
+- Explicit Pydantic response schemas with `from_attributes=True` — full control over the HTTP contract; ORM model and API shape evolve independently; `model_validate(orm_record)` reads attributes directly with no intermediate dict mapping
+**Decision:** Explicit response schemas. The HTTP contract must be stable and independent of storage decisions. `StockReportResponse` and `AnalysisJobResponse` expose only the fields callers need, keep `Decimal` for scores (no float drift), and decouple the API from future ORM changes.
+**Outcome:** `StockReportResponse` and `AnalysisJobResponse` defined in `api.py`. Both use `model_config = {"from_attributes": True}`.
+
+---
+
+## DEC-025 — `GET /jobs` returns `200 + []` for empty collections, never `404`
+**Raised by:** Rex during Step 43 implementation
+**Context:** When no jobs exist, `list_recent_jobs()` returns `[]`. The question is whether to return `404` or `200 + []`.
+**Options considered:**
+- `404 Not Found` — signals "nothing here"; but misleads clients into thinking the endpoint doesn't exist, conflating an empty collection with a missing resource
+- `200 OK + []` — correct REST semantics; the endpoint exists, the collection is just empty
+**Decision:** `200 + []`. REST convention is clear: `404` is for missing resources (a specific ticker with no report), not empty collections. A collection endpoint always exists — it just has zero items. Consistent with `GET /reports/{ticker}` which does return `404` when a specific resource is missing.
+**Outcome:** `GET /jobs` route handler returns the list from `list_recent_jobs()` directly — FastAPI serialises `[]` as a `200` response.
+
+---
+
 ## DEC-023 — `Numeric(4, 1)` over `Float` for score columns in `StockReportRecord`
 **Raised by:** Eran during Step 42 documentation review
 **Context:** Score columns (`fundamental_score`, `technical_score`, `weighted_score`) store decimal values in the range 1.0–10.0. The naive choice is `Float` — it maps directly to Python `float` and requires no conversion.
