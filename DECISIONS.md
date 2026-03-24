@@ -225,6 +225,17 @@ This log is evidence of genuine human-AI collaboration — Eran (engineer) and C
 
 ---
 
+## DEC-021 — `db/crud.py` as a Facade over SQLAlchemy
+**Raised by:** Eran during Step 42 documentation review
+**Context:** All DB operations could be written inline inside FastAPI route handlers or Celery tasks — SQLAlchemy sessions are available in both contexts.
+**Options considered:**
+- Inline DB calls in route handlers and tasks — fewer files, but each caller duplicates `select()` / `session.add()` / `db.refresh()` logic and is tightly coupled to the ORM implementation
+- Dedicated `crud.py` module with intention-revealing functions — all SQLAlchemy complexity in one place; callers see `create_job(db, ticker)` not the machinery behind it
+**Decision:** Dedicated CRUD module (Facade pattern). The facade gives every database operation a single, testable home. Route handlers, Celery tasks, and the NiceGUI layer all call the same functions without knowing how data is stored. Changing a query strategy or adding caching touches one file, not every caller. Each CRUD function is independently testable with an in-memory SQLite session — no HTTP server or worker required.
+**Outcome:** `db/crud.py` is the only layer that writes SQLAlchemy queries. All other layers call CRUD functions with an injected `AsyncSession`.
+
+---
+
 ## DEC-020 — Alembic reads DATABASE_URL from Settings at runtime, not from alembic.ini
 **Raised by:** Rex (Step 38 backend infrastructure setup)
 **Context:** `alembic init` generates `alembic.ini` with a `sqlalchemy.url` placeholder. The naive approach is to put the database URL there — but this is a plaintext file committed to the repo.

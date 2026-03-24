@@ -404,6 +404,8 @@ score: Numeric = Decimal("7.1")
 
 The CRUD layer exists to give every database operation a single, testable home that is completely decoupled from the HTTP layer, the Celery worker, and the NiceGUI frontend. Route handlers and tasks call these functions without knowing anything about how data is stored — and the functions themselves never know who called them. This makes each layer independently testable and swappable. See QA.md Q38 for the full reasoning.
 
+This is the **Facade pattern** (GoF): `crud.py` hides all SQLAlchemy complexity — `select()`, `session.add()`, `scalar_one_or_none()`, `db.refresh()` — behind a clean, intention-revealing interface. Callers see `create_job(db, ticker)`, not the machinery behind it.
+
 Five async functions that cover the full job and report lifecycle. All accept an injected `AsyncSession` — sessions are never created inside CRUD functions. All queries use SQLAlchemy ORM exclusively — no raw SQL.
 
 ### The five functions

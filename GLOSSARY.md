@@ -518,6 +518,21 @@ ui.element("q-skeleton").props("type=text width=60%")                  # text li
 ```
 Key types: `text` (single line), `rect` (block), `circle` (round). Size controlled via `width`/`height` props. The skeleton layout should mirror the real component's geometry — same row structure, same approximate sizes.
 
+### Facade Pattern (GoF)
+A structural design pattern where a single class or module provides a simplified interface to a more complex subsystem. Callers interact with the facade without knowing about the subsystem's internal components.
+
+In this project, `db/crud.py` is a Facade over SQLAlchemy. Route handlers and Celery tasks call `create_job(db, ticker)` — they never see `select()`, `session.add()`, `scalar_one_or_none()`, or `db.refresh()`. All of that complexity lives inside `crud.py`.
+
+```
+FastAPI route  ─┐
+Celery task    ─┼─→  crud.py (Facade)  →  SQLAlchemy ORM  →  PostgreSQL
+NiceGUI panel  ─┘
+```
+
+The pattern also appears in `run_scoring_task` (Celery chord facade hiding pipeline complexity). See DEC-021.
+
+---
+
 ### Tailwind Responsive Prefixes
 Tailwind's mobile-first responsive system. A class prefixed with `sm:`, `md:`, `lg:`, or `xl:` only applies at that breakpoint and above. Used in NiceGUI via `.classes()` — no CSS files needed.
 
