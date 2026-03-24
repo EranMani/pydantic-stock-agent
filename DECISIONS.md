@@ -225,6 +225,28 @@ This log is evidence of genuine human-AI collaboration — Eran (engineer) and C
 
 ---
 
+## DEC-028 — Celery `accept_content = ["json"]` blocks pickle payloads at the deserialiser
+**Raised by:** Rex during Step 45 implementation
+**Context:** Celery's default `accept_content` includes pickle. Any message arriving at the broker (including malicious ones) that claims to be pickle-serialised will be deserialised — executing arbitrary code.
+**Options considered:**
+- Leave default (`accept_content` includes pickle) — simpler; but exposes the worker to remote code execution if the broker receives a crafted message (a known Celery attack vector)
+- `accept_content = ["json"]` — worker refuses to deserialise any message that isn't JSON; eliminates the pickle RCE vector at zero cost
+**Decision:** `accept_content = ["json"]`. All tasks in this project use JSON-serialisable arguments (strings, dicts). There is no reason to allow pickle. Defence in depth: even if the Redis broker were compromised, the worker would reject non-JSON messages.
+**Outcome:** `celery.conf.accept_content = ["json"]` in `worker/celery_app.py`.
+
+---
+
+## DEC-027 — All analysis tasks routed to a dedicated `analysis` queue
+**Raised by:** Rex during Step 45 implementation
+**Context:** Celery uses a default queue (`celery`) unless configured otherwise. All tasks land in the same queue, making it impossible to prioritise or isolate different workloads.
+**Options considered:**
+- Default queue — simplest; but mixes analysis tasks with any future maintenance/admin tasks; can't scale workers independently per workload type
+- Dedicated `analysis` queue via `task_routes` — all `stock_agent.worker.tasks.*` tasks route to `analysis`; workers started with `--queues analysis` consume only analysis jobs; future admin tasks can run on separate workers
+**Decision:** Dedicated `analysis` queue. Workers are started with `--queues analysis` to consume only analysis tasks. Future low-latency or admin tasks can be added to separate queues without touching analysis worker config.
+**Outcome:** `celery.conf.task_routes = {"stock_agent.worker.tasks.*": {"queue": "analysis"}}` in `worker/celery_app.py`.
+
+---
+
 ## DEC-026 — Celery broker and result backend use separate Redis databases (DB 0 and DB 1)
 **Raised by:** Eran during Step 44 documentation review
 **Context:** Celery requires a broker (task queue) and a result backend (task return value store). Both can point to the same Redis instance.

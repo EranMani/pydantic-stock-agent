@@ -397,3 +397,21 @@ Without the lightweight tool, the agent re-runs the full pipeline or reasons bli
 **Migration path:** `alembic upgrade head` (apply) | `alembic downgrade -1` (rollback one step).
 
 *More diagrams will be added as phases are built.*
+
+---
+
+## Worker Infrastructure (Phase 9 — Steps 44–52)
+
+**Stack:** Celery 5 + Redis (broker on DB 0, result backend on DB 1).
+
+**Package:** `src/stock_agent/worker/` — created in Step 45. Contains:
+- `celery_app.py` — Celery instance, serialisation config, task routing
+- `state.py` — Redis progress publisher (Step 46)
+- `tasks.py` — Celery task definitions (Steps 47+)
+
+**Key contracts:**
+- The Celery app is a separate process from the FastAPI server — started independently via `uv run celery -A stock_agent.worker.celery_app worker --queues analysis`
+- All tasks route to the `analysis` queue via `task_routes = {"stock_agent.worker.tasks.*": {"queue": "analysis"}}` — isolates analysis load from future maintenance tasks
+- JSON serialisation enforced end-to-end (`task_serializer`, `result_serializer`, `accept_content` all `"json"`) — blocks pickle payloads at the deserialiser level
+- Celery tasks are always `def` (synchronous) — async pipeline work is delegated to a private `_async_*` function called via `asyncio.run()`
+- Progress is written to Redis under `job:{job_id}:progress` as JSON — `job_id` (stable DB identifier) is used, never the Celery `task_id` (which changes per sub-task in a chord)

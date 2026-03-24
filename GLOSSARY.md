@@ -534,6 +534,26 @@ SELECT * FROM stock_reports WHERE weighted_score > 8.0 AND recommendation = 'BUY
 
 ---
 
+### `accept_content` (Celery)
+A Celery worker config setting that whitelists which serialisation formats the worker will accept from the broker. Setting `accept_content = ["json"]` means the worker will **refuse to deserialise** any broker message that isn't JSON — regardless of what serialiser sent it.
+
+Celery's default includes `pickle`, which is a known remote code execution (RCE) vector: a crafted pickle payload arriving at the broker can execute arbitrary code on the worker. Setting `accept_content = ["json"]` eliminates this attack surface. See DEC-028.
+
+---
+
+### `analysis` queue (Celery)
+The dedicated Celery queue that receives all stock analysis tasks in this project. Configured via:
+```python
+celery.conf.task_routes = {"stock_agent.worker.tasks.*": {"queue": "analysis"}}
+```
+Workers must be started with `--queues analysis` to consume from it:
+```bash
+uv run celery -A stock_agent.worker.celery_app worker --queues analysis --loglevel=info
+```
+Isolates analysis workload from future maintenance or admin tasks that may run on separate queues. See DEC-027.
+
+---
+
 ### Celery Broker vs Result Backend
 Two distinct Redis roles in the Celery architecture:
 

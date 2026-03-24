@@ -572,9 +572,65 @@ See: **DEC-020** in `DECISIONS.md`.
 
 ## 6. Celery — Background Workers
 
-*(This section will be filled in during Steps 44–47)*
+### Phase 9 — Worker Infrastructure
 
-**What it covers:**
+#### File structure (Phase 9)
+
+| File | Responsibility |
+|---|---|
+| `worker/__init__.py` | Package init ✅ Step 45 |
+| `worker/celery_app.py` | Celery instance, broker/backend from settings, JSON serialisation, task routing ✅ Step 45 |
+| `worker/state.py` | Redis progress publisher — `publish_progress(job_id, stage, pct, message)` *(Step 46)* |
+| `worker/tasks.py` | `@celery.task` definitions: fundamental, technical, scoring *(Step 47)* |
+
+---
+
+#### `worker/celery_app.py` — the Celery instance (Step 45)
+
+Creates the single shared `celery` object imported by all tasks:
+
+```python
+from celery import Celery
+from stock_agent.config import settings
+
+celery = Celery(
+    "stock_agent",
+    broker=settings.CELERY_BROKER_URL,
+    backend=settings.CELERY_RESULT_BACKEND,
+)
+celery.conf.task_serializer = "json"
+celery.conf.result_serializer = "json"
+celery.conf.accept_content = ["json"]
+celery.conf.task_routes = {"stock_agent.worker.tasks.*": {"queue": "analysis"}}
+```
+
+**Config decisions:**
+
+**JSON serialisation (`task_serializer`, `result_serializer`, `accept_content`):**
+Celery defaults to `pickle` for both task payloads and results. Pickle is a known remote-code-execution vector — a crafted pickle payload delivered via the broker can execute arbitrary Python on the worker. This project enforces JSON throughout:
+- `task_serializer = "json"` — task arguments sent to broker as JSON
+- `result_serializer = "json"` — task results stored in backend as JSON
+- `accept_content = ["json"]` — worker refuses to deserialise any message that isn't JSON; pickle payloads are silently rejected
+
+JSON also makes broker messages human-readable — invaluable when debugging a stuck analysis job via `redis-cli`.
+
+**Task routing (`task_routes`):**
+All tasks under `stock_agent.worker.tasks.*` are routed to the `analysis` queue. Workers are started with `--queues analysis` to only pick up analysis work. Benefits:
+- Isolates analysis work from any future administrative or maintenance tasks on separate queues
+- Prevents a flood of analysis jobs from blocking low-latency operational tasks
+- Makes worker scaling explicit — adding an `analysis` worker increases analysis throughput only
+
+**`CELERY_BROKER_URL` and `CELERY_RESULT_BACKEND` from `settings`:**
+Both are read from `config.py` settings (populated from `.env`). Nothing is hardcoded. In production, inject via environment variables. In Docker Compose, the broker points at `redis://redis:6379/0` and the backend at `redis://redis:6379/1` (separate Redis DB to avoid broker/result key collisions).
+
+**Async boundary — important for all future tasks:**
+Celery does NOT support `async def` task bodies. Every task in `tasks.py` MUST be defined as `def` (synchronous). Async pipeline work is delegated to a private `async def _async_*()` helper called via `asyncio.run()`. This is a non-negotiable rule from CLAUDE.md.
+
+---
+
+*(Steps 46–47 will document `state.py` and `tasks.py` in this section)*
+
+**What steps 46–47 will cover:**
 - Why background workers exist (never block the FastAPI/NiceGUI event loop)
 - Celery task definition pattern (`def`, not `async def`, with `asyncio.run()` bridge)
 - Task anatomy: `run_fundamental_task`, `run_technical_task`, `run_scoring_task`
@@ -608,6 +664,8 @@ Backend-relevant entries in `DECISIONS.md`:
 | — | `job_id: String(36)` on `AnalysisJobRecord` is the stable Redis/DB shared identifier — never Celery's `task_id` | 39 |
 | — | `expire_on_commit=False` on session factory — prevents lazy-load blocking the async event loop after `commit()` | 40 |
 | — | `create_all` in dev mode only — production schema is always owned by Alembic, never by `metadata.create_all()` | 40 |
+| — | JSON serialisation enforced on Celery instance — `accept_content = ["json"]` blocks pickle payloads to prevent remote-code-execution via broker | 45 |
+| — | All `stock_agent.worker.tasks.*` routed to `analysis` queue — isolates analysis load from future maintenance tasks | 45 |
 
 *More entries will be added as Phases 8–10 are built.*
 

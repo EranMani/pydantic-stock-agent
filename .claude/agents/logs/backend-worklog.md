@@ -9,6 +9,7 @@
 
 | Date | Task | Status | Key Decision |
 |---|---|---|---|
+| 2026-03-24 | Step 45 — Celery app instance: broker/backend from settings, JSON serialisation, task routing to `analysis` queue | ✅ Done | JSON serialisation enforced (`accept_content = ["json"]`) to block pickle RCE; all tasks routed to `analysis` queue for isolation |
 | 2026-03-24 | Step 43 — GET /reports/{ticker} and GET /jobs FastAPI endpoints + response schemas + tests/test_api.py | ✅ Done | `from_attributes=True` on response schemas enables direct ORM-to-Pydantic serialisation without an intermediate dict mapping |
 | 2026-03-24 | Step 42 — async CRUD operations: create_job, update_job_status, save_report, get_report_by_ticker, list_recent_jobs | ✅ Done | save_report denormalises score columns alongside report_json for fast querying without JSON parsing |
 | 2026-03-23 | Step 41 — first Alembic migration: create stock_reports and analysis_jobs tables | ✅ Done | Port conflict: native Windows Postgres on 5432 intercepted Docker; moved container to 5433 for migration run |
@@ -16,6 +17,83 @@
 | 2026-03-23 | Step 39 — define StockReportRecord and AnalysisJobRecord ORM models | ✅ Done | Numeric(4,1) over Float for score columns — exact decimal storage in Postgres |
 | 2026-03-23 | Step 38 — install sqlalchemy/alembic/asyncpg, configure DATABASE_URL, init migrations | ✅ Done | env.py reads DATABASE_URL from Settings at runtime — alembic.ini has no hardcoded URL |
 | 2026-03-22 | Identity verification — first commit as Rex | ✅ Done | No engineering decision — contributor identity test only |
+
+---
+
+## 2026-03-24 — Step 45: Celery App Instance
+
+### Task Brief
+
+Create `src/stock_agent/worker/__init__.py` (package init) and
+`src/stock_agent/worker/celery_app.py` (Celery instance with exact config from protocol).
+
+Files affected:
+- `src/stock_agent/worker/__init__.py` — created (package init, module docstring)
+- `src/stock_agent/worker/celery_app.py` — created (Celery instance, JSON serialisation, task routing)
+- `.claude/agents/logs/backend-worklog.md` — this update
+- `BACKEND.md` — Phase 9 file structure + Section 6 filled in for Step 45
+
+### Decisions
+
+**JSON serialisation instead of Celery's default pickle:**
+Celery defaults to `pickle` — a known RCE vector if the broker is ever compromised or receives a malicious message. This project enforces JSON via `task_serializer = "json"`, `result_serializer = "json"`, and `accept_content = ["json"]`. The `accept_content` setting is the critical one: the worker will refuse to deserialise any non-JSON message, blocking pickle payloads entirely. As a side benefit, JSON broker messages are human-readable — useful when debugging a stuck job via `redis-cli`.
+
+**`analysis` queue for all `stock_agent.worker.tasks.*`:**
+`task_routes = {"stock_agent.worker.tasks.*": {"queue": "analysis"}}` routes every analysis task to the dedicated `analysis` queue. Workers are started with `--queues analysis`. This isolates analysis load from any future low-latency administrative tasks that might share the same broker. Scaling analysis throughput = add analysis workers, nothing else changes.
+
+**Broker and backend from `settings`, not hardcoded:**
+`celery.conf.broker_url` is implicitly set from the Celery constructor's `broker=` argument, which reads `settings.CELERY_BROKER_URL`. Same for `backend=settings.CELERY_RESULT_BACKEND`. No URLs in `celery_app.py`. In Docker Compose, inject `CELERY_BROKER_URL=redis://redis:6379/0` and `CELERY_RESULT_BACKEND=redis://redis:6379/1` at runtime.
+
+**No tasks registered in this file:**
+`celery_app.py` creates the instance only. Tasks live in `tasks.py` (Step 47) and will import this `celery` object. Clean separation — the instance config is stable, tasks evolve independently.
+
+**Async boundary documented as a module comment (not just worklog):**
+`async def` is forbidden in Celery task bodies. This is documented in the module docstring of `celery_app.py` so the next developer who opens the file sees it immediately — not buried in worklog or CLAUDE.md.
+
+### Verification
+
+```
+uv run python -c "from stock_agent.worker.celery_app import celery; ..."
+broker: redis://localhost:6379/0        ✓
+backend: redis://localhost:6379/1       ✓
+serializer: json                        ✓
+accept_content: ['json']               ✓
+routes: {'stock_agent.worker.tasks.*': {'queue': 'analysis'}}  ✓
+
+uv run celery -A stock_agent.worker.celery_app inspect --help
+→ CLI loads module cleanly, help text printed, no import errors  ✓
+
+uv run pytest tests/test_db.py tests/test_api.py -q
+→ 36 passed, 2 warnings — no regressions  ✓
+```
+
+Note: No `test_worker.py` exists yet (comes in Step 47 with tasks.py). The celery_app module
+has no logic to test directly — its correctness is proven by the import + config value assertions
+above. Tests for task routing behaviour will land in Step 47.
+
+### Self-Review
+
+```
+CORRECTNESS
+[✓] Module imports cleanly — uv run python -c "from stock_agent.worker.celery_app import celery"
+[✓] All 5 config values match protocol spec exactly
+[✓] CLI loads module via uv run celery -A stock_agent.worker.celery_app inspect --help
+[✓] 36/36 existing tests pass — no regressions
+[N/A] No test_worker.py yet — no task logic exists to test (comes in Step 47)
+
+SAFETY
+[✓] No hardcoded URLs — broker/backend from settings
+[✓] No async def — Celery tasks are def only (enforced in module docstring)
+[✓] JSON accept_content — pickle blocked at the deserialiser level
+[✓] No secrets anywhere in the file
+
+COMPLETENESS
+[✓] Worklog session table updated to ✅ Done
+[✓] BACKEND.md Phase 9 file structure added; Section 6 filled in for Step 45
+[✓] Design Decisions Index updated with two new entries
+[✓] Handoff note written for Claude below
+[✓] COMMIT PROPOSAL block ready
+```
 
 ---
 
