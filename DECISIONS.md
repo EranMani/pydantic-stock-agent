@@ -225,6 +225,17 @@ This log is evidence of genuine human-AI collaboration — Eran (engineer) and C
 
 ---
 
+## DEC-023 — `Numeric(4, 1)` over `Float` for score columns in `StockReportRecord`
+**Raised by:** Eran during Step 42 documentation review
+**Context:** Score columns (`fundamental_score`, `technical_score`, `weighted_score`) store decimal values in the range 1.0–10.0. The naive choice is `Float` — it maps directly to Python `float` and requires no conversion.
+**Options considered:**
+- `Float` — simple, no conversion needed; but IEEE 754 binary fractions mean 7.1 stored as a float can come back as 7.09999999999999964 from PostgreSQL — unacceptable for financial scores that appear in API responses, UI gauges, and filter queries
+- `Numeric(4, 1)` with `Decimal` — PostgreSQL stores exact decimals; 7.1 always comes back as 7.1; requires explicit conversion from Python `float` before insert
+**Decision:** `Numeric(4, 1)` with `Decimal` conversion. For financial scores, precision drift is a correctness issue, not a minor concern — a score of 7.1 must be 7.1 everywhere: in the DB, in the API response, in the UI gauge, and in filter queries. The conversion overhead is negligible. `save_report()` converts via `Decimal(str(round(score, 1)))` — going through `str()` first avoids inheriting any float imprecision before the value reaches the database. See QA.md Q40 for the full conversion explanation.
+**Outcome:** All three score columns defined as `Numeric(4, 1)` in `models.py`. `save_report()` in `crud.py` converts scores via `Decimal(str(round(score, 1)))` on every insert.
+
+---
+
 ## DEC-022 — Denormalized score columns in `StockReportRecord` for filter and sort performance
 **Raised by:** Eran during Step 42 documentation review
 **Context:** `StockReportRecord` stores the full `StockReport` as a JSON blob in `report_json`. Scores and recommendation are already inside that JSON — they could be read from there at query time.

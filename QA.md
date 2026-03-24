@@ -47,6 +47,7 @@ Running record of design and concept questions discussed during development.
 | 37 | Why does `save_report` store scores in both `report_json` and dedicated columns? | Database |
 | 38 | Why do we have a dedicated CRUD layer instead of writing DB calls inline? | Database |
 | 39 | What is `aiosqlite` and why does it eliminate the need for Docker in DB tests? | Database / Testing |
+| 40 | Why does `save_report` convert scores via `Decimal(str(round(score, 1)))` — why go through `str()`? | Database |
 
 ---
 
@@ -1026,6 +1027,37 @@ The dedicated columns exist so the API and UI can query, sort, and filter by sco
 This is a standard **denormalization** pattern: accept a small amount of data duplication at write time in exchange for significantly faster and simpler reads.
 
 *Raised by Eran during Step 42 review.*
+
+---
+
+### Q: Why does `save_report` convert scores via `Decimal(str(round(score, 1)))` — why go through `str()`?
+
+The score fields on `StockReport` are Python `float` values. PostgreSQL stores them as `Numeric(4, 1)` — exact decimals. The conversion bridge is:
+
+```python
+Decimal(str(round(score, 1)))
+```
+
+**Why not `Decimal(score)` directly?**
+`Decimal(7.1)` inherits the float's binary representation — it gives you `Decimal('7.09999999999999964472863211994990706443786621093750')`. The imprecision is already baked in before PostgreSQL ever sees the value.
+
+**Why `str()` first?**
+`Decimal("7.1")` — constructed from a string — parses the human-readable representation exactly. `"7.1"` means 7.1, with no binary fraction approximation involved. The result is `Decimal('7.1')` — clean, exact, and what `Numeric(4, 1)` expects.
+
+**Why `round(..., 1)` before that?**
+`round(score, 1)` enforces the one-decimal-place contract before conversion. A score of `7.149999...` (float arithmetic artifact) becomes `7.1` before it ever touches `str()` or `Decimal`. Without it, edge cases in float arithmetic could produce values that violate the `Numeric(4, 1)` scale.
+
+**Full chain:**
+```python
+score = 7.1          # Python float from pipeline
+round(score, 1)      # → 7.1  (enforce 1 decimal place)
+str(7.1)             # → "7.1" (human-readable, no binary drift)
+Decimal("7.1")       # → Decimal('7.1') (exact, safe for Numeric(4,1))
+```
+
+This is the standard pattern for float → Decimal conversion in any financial or precision-sensitive context. See DEC-023.
+
+*Raised by Eran during Step 42 documentation review.*
 
 ---
 
