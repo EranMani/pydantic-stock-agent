@@ -518,6 +518,23 @@ ui.element("q-skeleton").props("type=text width=60%")                  # text li
 ```
 Key types: `text` (single line), `rect` (block), `circle` (round). Size controlled via `width`/`height` props. The skeleton layout should mirror the real component's geometry — same row structure, same approximate sizes.
 
+### `aiosqlite` — async SQLite driver for testing
+A Python package that provides an async interface to SQLite, compatible with SQLAlchemy's `AsyncSession`. Used exclusively in the test suite via `sqlite+aiosqlite:///:memory:`.
+
+**Why it matters for this project:** Our production code uses `asyncpg` (async Postgres driver). Tests that exercise CRUD functions need a real database. `aiosqlite` provides one — in-process, in-memory, no Docker required. The SQLAlchemy `AsyncSession` is database-agnostic, so the exact same CRUD functions run against SQLite in tests and Postgres in production without any code changes.
+
+```python
+# Production engine
+create_async_engine("postgresql+asyncpg://user:pass@host/db")
+
+# Test engine — same AsyncSession, no Docker needed
+create_async_engine("sqlite+aiosqlite:///:memory:")
+```
+
+Each test gets a fresh in-memory database, isolated from every other test. The DB is gone when the test ends. See QA.md Q39.
+
+---
+
 ### Facade Pattern (GoF)
 A structural design pattern where a single class or module provides a simplified interface to a more complex subsystem. Callers interact with the facade without knowing about the subsystem's internal components.
 

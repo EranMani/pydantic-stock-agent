@@ -46,6 +46,7 @@ Running record of design and concept questions discussed during development.
 | 36 | Why is `db.refresh()` called after every commit in the CRUD layer? | Database |
 | 37 | Why does `save_report` store scores in both `report_json` and dedicated columns? | Database |
 | 38 | Why do we have a dedicated CRUD layer instead of writing DB calls inline? | Database |
+| 39 | What is `aiosqlite` and why does it eliminate the need for Docker in DB tests? | Database / Testing |
 
 ---
 
@@ -1025,3 +1026,27 @@ The dedicated columns exist so the API and UI can query, sort, and filter by sco
 This is a standard **denormalization** pattern: accept a small amount of data duplication at write time in exchange for significantly faster and simpler reads.
 
 *Raised by Eran during Step 42 review.*
+
+---
+
+### Q: What is `aiosqlite` and why does it eliminate the need for Docker in DB tests?
+
+**The problem without it:** Our production code uses `AsyncSession` with `asyncpg` (the async Postgres driver). Tests that exercise CRUD functions need a real database to talk to. Without `aiosqlite`, the only option is a live PostgreSQL instance — which means `docker-compose up`, waiting for the container to be healthy, and tearing it down after. This makes the test suite slow, fragile, and impossible to run without Docker installed.
+
+**What `aiosqlite` provides:** `aiosqlite` is an async driver for SQLite — the same interface as `asyncpg`, but backed by SQLite instead of PostgreSQL. SQLite runs entirely in-process (no server, no network, no Docker), and the `sqlite:///:memory:` URL creates a database that exists only in RAM for the lifetime of the test.
+
+**Why it works with our code unchanged:** SQLAlchemy's `AsyncSession` is database-agnostic. It doesn't care whether the engine underneath is `asyncpg` (Postgres) or `aiosqlite` (SQLite). The CRUD functions receive an `AsyncSession` and call `session.add()`, `session.execute()`, `db.refresh()` — none of that changes between environments. Swapping the driver is a one-line change in the test fixture:
+
+```python
+# Production (api.py / Celery task)
+engine = create_async_engine("postgresql+asyncpg://user:pass@localhost/stockagent")
+
+# Tests (conftest.py) — same AsyncSession, different engine
+engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+```
+
+**The development benefit:** Running `uv run pytest tests/test_db.py` requires zero infrastructure — no Docker, no running Postgres, no environment variables. The in-memory SQLite DB is created fresh for every test, populated with exactly the rows the test inserts, and discarded when the test ends. Tests are fast, isolated, and portable across any machine.
+
+**The trade-off:** SQLite and PostgreSQL are not identical. `Numeric(4,1)` precision, `DateTime(timezone=True)`, and `UNIQUE` constraints all behave slightly differently. For structural and CRUD unit tests this is fine — the differences don't affect the logic being tested. For migration testing and type-precision verification, a real Postgres instance (Tier 2 testing) is still needed.
+
+*Raised by Eran during Step 42 documentation review.*

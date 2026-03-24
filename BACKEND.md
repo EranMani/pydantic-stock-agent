@@ -645,7 +645,7 @@ Tests are the proof that SQLAlchemy correctly translated your Python definitions
 
 **Tier 1 — SQLite in-memory (no infrastructure needed)**
 
-Used for structural and round-trip tests. SQLite spins up in milliseconds inside the test process — no Docker, no running Postgres required.
+Used for structural and round-trip tests. SQLite spins up in milliseconds inside the test process — no Docker, no running Postgres, no environment variables required. This is enabled by `aiosqlite`: an async SQLite driver that is interface-compatible with `asyncpg`. Because SQLAlchemy's `AsyncSession` is database-agnostic, the exact same CRUD functions that run against Postgres in production run against an in-memory SQLite DB in tests — zero code changes between environments. See QA.md Q39.
 
 ```python
 from sqlalchemy import create_engine
