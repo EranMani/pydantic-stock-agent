@@ -518,6 +518,22 @@ ui.element("q-skeleton").props("type=text width=60%")                  # text li
 ```
 Key types: `text` (single line), `rect` (block), `circle` (round). Size controlled via `width`/`height` props. The skeleton layout should mirror the real component's geometry — same row structure, same approximate sizes.
 
+### Denormalization
+A deliberate database design technique where data that already exists in one place is duplicated into additional columns or tables to make reads faster. It is the intentional counterpart to normalization.
+
+**Normalization** stores every piece of data exactly once — no duplication, clean writes, but reads often require JOINs or parsing to reconstruct the full picture.
+
+**Denormalization** accepts controlled duplication at write time in exchange for simpler, faster reads — typically hitting a single indexed column instead of parsing a blob or joining multiple tables.
+
+**In this project:** `StockReportRecord` stores the full `StockReport` as `report_json` (source of truth) and also copies `fundamental_score`, `technical_score`, `weighted_score`, and `recommendation` into dedicated `Numeric`/`String` columns. Filtering all BUY stocks above score 8 hits an indexed column directly in PostgreSQL — no JSON parsing, no application-side filtering. The cost is storing scores twice; for read-heavy filter and sort patterns it is worth it. See DEC-022.
+
+```sql
+-- Denormalized: fast, indexed, handled entirely by PostgreSQL
+SELECT * FROM stock_reports WHERE weighted_score > 8.0 AND recommendation = 'BUY';
+```
+
+---
+
 ### `aiosqlite` — async SQLite driver for testing
 A Python package that provides an async interface to SQLite, compatible with SQLAlchemy's `AsyncSession`. Used exclusively in the test suite via `sqlite+aiosqlite:///:memory:`.
 
