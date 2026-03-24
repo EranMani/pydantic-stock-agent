@@ -225,6 +225,23 @@ This log is evidence of genuine human-AI collaboration — Eran (engineer) and C
 
 ---
 
+## DEC-022 — Denormalized score columns in `StockReportRecord` for filter and sort performance
+**Raised by:** Eran during Step 42 documentation review
+**Context:** `StockReportRecord` stores the full `StockReport` as a JSON blob in `report_json`. Scores and recommendation are already inside that JSON — they could be read from there at query time.
+**Options considered:**
+- JSON-only storage — single source of truth, no duplication; but finding all BUY stocks above score 8 requires pulling every JSON blob, deserialising each one in Python, and filtering in application code — does not scale
+- Denormalized typed columns alongside JSON — `fundamental_score`, `technical_score`, `weighted_score`, `recommendation` stored as `Numeric(4,1)` and `String` columns in addition to `report_json`; PostgreSQL handles the entire filter in a single indexed query
+**Decision:** Denormalized columns (Option B). `report_json` remains the source of truth for display and full report retrieval. The score and recommendation columns are denormalized copies used purely for filtering and sorting. The cost is storing the scores twice; for read-heavy filter and sort patterns this is absolutely worth it.
+```sql
+-- With denormalized columns: fast, indexed, handled entirely by Postgres
+SELECT * FROM stock_reports WHERE weighted_score > 8.0 AND recommendation = 'BUY';
+
+-- Without: pull every row, parse JSON in Python, filter in application code
+```
+**Outcome:** `StockReportRecord` has both `report_json` (JSON) and `fundamental_score`, `technical_score`, `weighted_score`, `recommendation` as dedicated typed columns. `save_report()` in `crud.py` populates both on every insert.
+
+---
+
 ## DEC-021 — `db/crud.py` as a Facade over SQLAlchemy
 **Raised by:** Eran during Step 42 documentation review
 **Context:** All DB operations could be written inline inside FastAPI route handlers or Celery tasks — SQLAlchemy sessions are available in both contexts.
