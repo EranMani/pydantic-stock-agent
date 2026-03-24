@@ -225,6 +225,18 @@ This log is evidence of genuine human-AI collaboration — Eran (engineer) and C
 
 ---
 
+## DEC-026 — Celery broker and result backend use separate Redis databases (DB 0 and DB 1)
+**Raised by:** Eran during Step 44 documentation review
+**Context:** Celery requires a broker (task queue) and a result backend (task return value store). Both can point to the same Redis instance.
+**Options considered:**
+- Same Redis database for both (`redis://localhost:6379/0`) — simpler config; but broker traffic (high-throughput task enqueue/dequeue) and result reads/writes share the same keyspace, creating interference and making it harder to monitor or flush one without affecting the other
+- Separate Redis databases (`/0` for broker, `/1` for result backend) — clean keyspace separation with zero infrastructure overhead; Redis supports up to 16 logical databases on a single instance, each fully isolated
+- Two separate Redis instances — maximum isolation but doubles infrastructure cost for no meaningful benefit at this scale
+**Decision:** Separate logical databases on the same Redis instance (`/0` broker, `/1` result backend). Broker traffic and result storage are isolated, independently flushable, and independently monitorable — with no extra Docker containers or connection overhead.
+**Outcome:** `CELERY_BROKER_URL = "redis://localhost:6379/0"`, `CELERY_RESULT_BACKEND = "redis://localhost:6379/1"` in `config.py`.
+
+---
+
 ## DEC-024 — Separate Pydantic response schemas over raw ORM objects in HTTP endpoints
 **Raised by:** Rex during Step 43 implementation
 **Context:** FastAPI can accept SQLAlchemy ORM models directly as `response_model`. This avoids defining extra classes.

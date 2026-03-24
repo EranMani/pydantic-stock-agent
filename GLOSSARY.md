@@ -534,6 +534,24 @@ SELECT * FROM stock_reports WHERE weighted_score > 8.0 AND recommendation = 'BUY
 
 ---
 
+### Celery Broker vs Result Backend
+Two distinct Redis roles in the Celery architecture:
+
+**Broker (`CELERY_BROKER_URL` → `redis://localhost:6379/0`)**
+The task queue. When a caller invokes `.delay()` or `.apply_async()`, Celery serialises the task and pushes it to the broker. Workers consume from the broker — one task per worker at a time. High-throughput: tasks are written and deleted continuously.
+
+**Result Backend (`CELERY_RESULT_BACKEND` → `redis://localhost:6379/1`)**
+The task result store. After a worker completes a task, it writes the return value here. Callers can later retrieve it via `AsyncResult(task_id).get()`. Lower throughput than the broker — results are written once and read once (or never, if the caller doesn't need them).
+
+**Why separate Redis databases?**
+Using different logical databases (`/0` and `/1`) on the same Redis instance keeps the keyspaces isolated — broker traffic cannot interfere with result reads, and either can be flushed independently for debugging. No extra infrastructure needed. See DEC-026.
+
+```
+Caller → broker (DB 0) → Worker → result backend (DB 1) → Caller
+```
+
+---
+
 ### `from_attributes` (Pydantic v2)
 Pydantic v2 model config option that enables `model_validate()` to read from Python object attributes rather than dict keys. Required when populating a Pydantic model from a SQLAlchemy ORM instance.
 
