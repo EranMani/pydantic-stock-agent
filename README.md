@@ -2,6 +2,23 @@
 
 A PydanticAI stock research demo that gathers market context, runs deterministic calculations, and returns a validated structured `StockReport`. It is a technical demo of agentic reasoning with typed outputs, not financial advice.
 
+![Pydantic Stock Agent UI](src/assets/stock_agent_screenshot.jpg)
+
+## Table of Contents
+
+- [What It Demonstrates](#what-it-demonstrates)
+- [Quickstart](#quickstart)
+- [Web UI](#web-ui)
+- [Demo](#demo)
+- [Architecture](#architecture)
+- [Output Schema](#output-schema)
+- [How The Agent Works](#how-the-agent-works)
+- [For Interviewers](#for-interviewers)
+- [Tests](#tests)
+- [Disclaimer](#disclaimer)
+- [Limitations](#limitations)
+- [Next Improvements](#next-improvements)
+
 ## What It Demonstrates
 
 - PydanticAI agent orchestration
@@ -30,6 +47,16 @@ Real mode requires provider credentials in `.env`:
 cp .env.example .env
 uv run stock-agent --ticker AAPL
 ```
+
+## Web UI
+
+Run the NiceGUI site locally:
+
+```bash
+uv run python -m stock_agent.ui.app
+```
+
+Then open `http://localhost:8080`.
 
 ## Demo
 
