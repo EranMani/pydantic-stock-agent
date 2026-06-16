@@ -9,6 +9,9 @@
 
 | Date | Task | Status | Key Decision |
 |---|---|---|---|
+| 2026-06-16 | app.py - tighten main layout spacing | Done | Reduced page vertical padding and card/result gap so the UI reads denser without crowding controls |
+| 2026-06-16 | app.py - place weight slider and values in one row | Done | Slider now flexes left while the exact Fundamental/Technical split is pinned right |
+| 2026-06-16 | app.py - remove fixed Stock Agent header | Done | Removed the 56px fixed header and body offset so the control card and results start higher |
 | 2026-06-16 | report_card.py - move score values above progress bars | Done | Numeric score values now sit above the right edge of each bar, keeping 8px tracks readable |
 | 2026-03-22 | report_card.py — three targeted fixes (company_name, remove score labels, sentiment bullets) | ✅ Done | Replaced q-list/q-item with plain column of rows for full layout control |
 | 2026-03-22 | Dashboard "Precision Dark" redesign — gray-950 depth system, SCORE_GLOW, linear bars | ✅ Done | Linear bars replace ring gauges — scan 2x faster at dashboard density |
@@ -28,6 +31,74 @@
 ## Active Work
 
 _No task in progress. Add a new entry here when a task begins._
+
+### 2026-06-16 - app.py: Tighten main layout spacing
+
+**Task Brief:** Eran asked to reduce the gaps and paddings in the main layout, especially between the primary components.
+
+**Work Completed:**
+- Reduced the outer page column from `py-6` and `gap-6` to `py-4` and `gap-4`.
+- Reduced the control card internal spacing from `gap-4` to `gap-3`.
+- Kept horizontal page padding at `px-4` so mobile edge breathing room remains intact.
+
+**Design Decisions Log:**
+- Use density where it improves scan speed: the card/result relationship should feel connected, while the controls still need enough air to avoid accidental taps.
+
+**Self-Review Checklist:**
+- Visual: main components sit closer together and the page starts higher.
+- Responsive: touch targets are unchanged; only container spacing changed.
+- Accessibility: no controls or labels were removed.
+
+**Notes for Developer Agent:**
+- Presentation-only change in `src/stock_agent/ui/app.py`.
+
+### 2026-06-16 - app.py: Place weight slider and values in one row
+
+**Task Brief:** Eran asked to place the fundamental/technical slider and live values on the same row, with the slider on the left and the values on the right.
+
+**Work Completed:**
+- Wrapped the slider and live weight label in a single `ui.row()`.
+- Set the slider to `flex-1 min-w-0` so it takes available horizontal space without pushing the label out.
+- Set the value label to `text-right whitespace-nowrap shrink-0` so the exact split stays pinned and legible on the right.
+- Removed the slider's floating `label` prop so the row has one clear source of numeric truth.
+
+**Design Decisions Log:**
+- The slider is the control; the value label is the readout. Keeping them in one row makes the relationship immediate and saves vertical space.
+
+**Discoveries / Issues:**
+- The nearby inline comment still names the old stacked row. The runtime layout is correct; clean that comment during a broader encoding-normalization pass.
+
+**Self-Review Checklist:**
+- Visual: slider and readout now scan as one control group.
+- Responsive: `min-w-0` and `shrink-0` protect both sides from awkward compression.
+- Accessibility: NiceGUI slider behavior is unchanged; value text remains visible outside the control.
+
+**Notes for Developer Agent:**
+- No data or API changes. This is a layout-only update in `src/stock_agent/ui/app.py`.
+
+### 2026-06-16 - app.py: Remove fixed Stock Agent header
+
+**Task Brief:** Eran asked to remove the Stock Agent header completely so the main layout elements have more room and appear higher in the viewport.
+
+**Work Completed:**
+- Removed the `app_header()` render call from the main page.
+- Removed the `HEADER["body_offset"]` class from the page column so the layout no longer reserves 56px for removed chrome.
+- Deleted the now-unused `app_header()` function and removed the stale `HEADER` import from `app.py`.
+- Removed an unused `asyncio` import while touching the same module.
+
+**Design Decisions Log:**
+- The header was decorative chrome, not a working control. Removing it gives priority back to the ticker form, strategy controls, and result card.
+
+**Discoveries / Issues:**
+- The module docstring still references the old three-zone toolbar layout. The runtime behavior is correct; the docstring should be cleaned in an encoding-normalization pass.
+
+**Self-Review Checklist:**
+- Visual: first meaningful controls now start at the page padding instead of below a fixed header.
+- Responsive: no fixed top chrome means less vertical pressure on mobile.
+- Accessibility: no interactive controls were removed; the removed header only contained brand/status text.
+
+**Notes for Developer Agent:**
+- No API or state changes. This is presentation-only inside `src/stock_agent/ui/app.py`.
 
 ### 2026-06-16 - report_card.py: Move score values above progress bars
 

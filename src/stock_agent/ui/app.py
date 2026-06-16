@@ -37,8 +37,6 @@ introduced, the button handler will dispatch a task and poll
 GET /jobs/{job_id}/status for real-time progress updates instead.
 """
 
-import asyncio
-
 import httpx
 from nicegui import ui
 
@@ -47,7 +45,7 @@ from stock_agent.config import settings
 from stock_agent.models.report import StockReport
 from stock_agent.ui.components.progress_panel import AnalysisState, progress_panel
 from stock_agent.ui.components.strategy_panel import StrategyState, strategy_panel
-from stock_agent.ui.theme import COLOURS, HEADER, PAGE_BG, SPACING, TRANSITIONS, TYPOGRAPHY, apply_theme
+from stock_agent.ui.theme import COLOURS, PAGE_BG, SPACING, TRANSITIONS, TYPOGRAPHY, apply_theme
 
 # Analyse button — dominant indigo, full width, min 44px touch target.
 # Applied at initial render and re-applied after enable/disable to preserve classes.
@@ -57,30 +55,6 @@ _ANALYSE_BTN_CLASSES: str = (
     "text-white font-semibold min-h-[44px] rounded-lg "
     f"{TRANSITIONS['normal']} ease-in-out"
 )
-
-
-def app_header() -> None:
-    """Render the full-bleed sticky toolbar at the top of the page.
-
-    Fixed position (z-50), gray-900 background, indigo bottom border.
-    Brand name left, live status indicator right.
-    Inner content constrained to max-w-2xl so it aligns with the body column.
-
-    Height contract: 56px (h-14). The main content column must offset by
-    pt-14 to clear this header — that offset lives in HEADER['body_offset'].
-    """
-    with ui.element("div").classes(HEADER["bar"]):
-        with ui.element("div").classes(HEADER["inner"]):
-            # Left side — brand identity
-            # brand_sub subtitle removed — visual clutter at 56px header height.
-            # The brand name alone is the right signal at this scale.
-            with ui.row().classes("items-center gap-0"):
-                ui.label("Stock Agent").classes(HEADER["brand_name"])
-
-            # Right side — live status indicator
-            with ui.row().classes("items-center"):
-                ui.element("div").classes(HEADER["status_dot"])
-                ui.label("Live").classes(HEADER["status_label"])
 
 
 def create_ui() -> None:
@@ -101,20 +75,13 @@ def create_ui() -> None:
         # NiceGUI without a CSS file.
         ui.query("body").classes(f"bg-{PAGE_BG}")
 
-        # Full-bleed sticky toolbar — outside the content column intentionally.
-        # Fixed position clears the page flow; the content column below is offset
-        # by pt-14 (56px) to compensate. See HEADER token in theme.py.
-        app_header()
-
         # Page-level state — one instance per browser session
         strategy_state = StrategyState()
         analysis_state = AnalysisState()
 
         # max-w-2xl: content doesn't need to be wide — it needs to be well-structured.
-        # pt-14: 56px offset to clear the fixed sticky header above.
         with ui.column().classes(
-            f"w-full max-w-2xl mx-auto {SPACING['page_padding']} {SPACING['section_gap']} "
-            f"{HEADER['body_offset']}"
+            f"w-full max-w-2xl mx-auto px-4 py-4 {SPACING['component_gap']}"
         ):
 
             # ------------------------------------------------------------------
@@ -136,7 +103,7 @@ def create_ui() -> None:
             # shadow-sm is the sole elevation authority. Without flat, Quasar and Tailwind
             # both apply shadows and the result is a muddy double-shadow.
             with ui.card().classes(
-                f"w-full {SPACING['card_padding_lg']} {SPACING['component_gap']} "
+                f"w-full {SPACING['card_padding']} {SPACING['compact_gap']} "
                 f"bg-{COLOURS['surface']} rounded-xl shadow-sm"
             ).props("flat"):
 
@@ -153,20 +120,17 @@ def create_ui() -> None:
                 ).classes("w-full").props('outlined rounded label="Ticker Symbol" color=indigo')
 
                 # Row 2 — Scoring weight label + live percentage display
-                weight_label = ui.label(
-                    f"Fundamental {strategy_state.fundamental_pct}%"
-                    f" · Technical {strategy_state.technical_pct}%"
-                ).classes(f"{TYPOGRAPHY['section_label']} text-{COLOURS['subtle']}")
-
-                # Row 3 — Weight slider (full width)
-                # Quasar prop: label — shows the current value in a floating bubble
-                # while dragging. Real-time feedback during interaction without adding
-                # static noise. The persistent text label above still shows the split
-                # at rest; this bubble confirms the value mid-drag.
-                # color=indigo maps to Quasar's built-in indigo palette — matches brand.
-                slider = ui.slider(
-                    min=0, max=100, step=1, value=strategy_state.fundamental_pct
-                ).classes("w-full").props("label color=indigo")
+                with ui.row().classes("w-full items-center gap-4"):
+                    slider = ui.slider(
+                        min=0, max=100, step=1, value=strategy_state.fundamental_pct
+                    ).classes("flex-1 min-w-0").props("color=indigo")
+                    weight_label = ui.label(
+                        f"Fundamental {strategy_state.fundamental_pct}%"
+                        f" · Technical {strategy_state.technical_pct}%"
+                    ).classes(
+                        f"{TYPOGRAPHY['section_label']} text-{COLOURS['subtle']} "
+                        "text-right whitespace-nowrap shrink-0"
+                    )
 
                 def on_weight_change(e) -> None:
                     """Update state and refresh weight display label on slider change."""
