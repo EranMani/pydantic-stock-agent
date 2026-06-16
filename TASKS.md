@@ -20,6 +20,7 @@ Out-of-protocol tasks logged by Eran during active development.
 | TASK-008 | `[x]` | Replace `key_points: list[str]` with `list[KeyPoint]` for sentiment bullets | Output |
 | TASK-009 | `[x]` | Remove numeric score labels from QLinearProgress bars | UI |
 | TASK-010 | `[ ]` | Add FK from `StockReportRecord.job_id` → `AnalysisJobRecord.job_id` | DB |
+| TASK-011 | `[x]` | Add recruiter-friendly CLI demo spine with mock mode | Demo |
 
 ---
 
@@ -51,3 +52,10 @@ yfinance's `industryPeers` field was silently removed — `fetch_industry_peers`
 **Acceptance criteria:** `report.job` ORM traversal works; `job.report` ORM traversal works; migration upgrades and downgrades cleanly; existing tests still pass.
 
 **Timing:** Deferred — implement before Step 43 (API endpoints) so the `GET /reports/{ticker}` response can include job metadata.
+
+### TASK-011 — Add recruiter-friendly CLI demo spine with mock mode
+**Raised by:** Eran during roadmap alignment for making this repo as instantly runnable as the RAG demo repo
+
+The repo needs one obvious command, a deterministic mock mode, a clear typed output contract, sample output, and focused tests so an interviewer can run the project in under 60 seconds without API keys.
+
+**Acceptance criteria:** `uv run stock-agent --ticker NVDA --mock` prints validated JSON and a readable summary; `python demo.py --ticker NVDA --mock` works as a convenience path; `.env.example` documents keys; README includes quickstart, architecture, schema, demo output, tests, disclaimer, and limitations; focused CLI/mock/model tests pass without network or LLM keys.

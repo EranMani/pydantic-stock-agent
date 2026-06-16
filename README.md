@@ -1,80 +1,143 @@
-# Autonomous PydanticAI Stock Analyst Agent
+# Pydantic Stock Agent
 
-> **Status: Work In Progress** — actively developed following a 62-step Atomic Commit Protocol. Not yet production-ready.
+A PydanticAI stock research demo that gathers market context, runs deterministic calculations, and returns a validated structured `StockReport`. It is a technical demo of agentic reasoning with typed outputs, not financial advice.
 
-## What Is This?
+## What It Demonstrates
 
-An autonomous stock analysis agent that combines deterministic financial data pipelines with structured LLM reasoning to produce actionable stock reports. The agent fetches real market data, computes technical indicators, scores stocks across fundamental and technical dimensions, and generates a structured `StockReport` — all without letting the LLM touch raw numbers or perform calculations.
+- PydanticAI agent orchestration
+- Tool calling for market data, technical indicators, peers, and news context
+- Typed Pydantic output with schema validation
+- Deterministic score calculation before LLM reasoning
+- JSON output plus a human-readable CLI summary
+- Mock mode for reproducible demos without API keys
 
-The core design principle: **the LLM reasons over pre-computed data, never computes it**.
-
-## Why I built it
-Built out of personal need — I'm a swing trader, and I wanted a tool that could analyze stocks against specific technical and fundamental conditions and tell me whether a setup is worth entering. What started as a personal trading tool became a production-grade AI engineering project.
-
-## What It Does
-
-- Fetches OHLCV price data, fundamentals (P/E, market cap, revenue, earnings), and industry peers via `yfinance`
-- Computes technical indicators deterministically using `pandas-ta`: SMA 50/150/200, MACD, 52-week high/low, Minervini Trend Template, and VCP pattern detection
-- Searches the web for recent news, risk flags, and lawsuits using DuckDuckGo
-- Scores stocks on fundamental and technical axes using a configurable `ScoringStrategy` (dynamic metric weights)
-- Generates a fully structured `StockReport` via a cloud LLM (OpenAI / Gemini) using PydanticAI
-- Uses a local Ollama model (`llama3.2`) for high-volume NLP tasks (news summarization, risk extraction) to minimize cloud API costs
-- Exposes analysis tools via an MCP server for integration with Claude and other MCP-compatible clients
-- Persists reports and job history to PostgreSQL via SQLAlchemy async ORM
-- Offloads all heavy work to Celery background workers with real-time Redis progress updates
-- Provides a web UI built entirely in Python using NiceGUI (no JS/HTML/CSS)
-
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Agent Core | `pydantic-ai`, `pydantic v2` |
-| Cloud LLM | OpenAI / Gemini (final reasoning) |
-| Local LLM | Ollama `llama3.2` (NLP tasks) |
-| Market Data | `yfinance`, `pandas-ta` |
-| Web Search | `duckduckgo-search` |
-| API Layer | `FastAPI` |
-| Frontend | `NiceGUI` (Python-only, no JS) |
-| Task Queue | `Celery` + `Redis` |
-| Database | `PostgreSQL` + `SQLAlchemy` async + `Alembic` |
-| MCP Server | Custom MCP server exposing agent tools |
-| Observability | `Logfire` |
-| DevOps | Docker (multi-stage), Docker Compose (5-service stack), GitHub Actions CI/CD |
-
-## Architecture Overview
-
-The system follows a strict separation between data pipelines and LLM reasoning:
-
-1. **Fundamental Pipeline** — fetches financials and news, extracts risk flags
-2. **Technical Pipeline** — computes indicators from OHLCV data, runs trend/pattern detection
-3. **Scoring Layer** — produces a weighted composite score using a configurable strategy
-4. **Agent Layer** — PydanticAI agent receives pre-scored data and generates the final `StockReport`
-5. **Worker Layer** — all pipeline work runs in Celery tasks; progress streamed to Redis
-6. **UI Layer** — NiceGUI web app polls job status and renders reports in real time
-
-## Project Status
-
-This project is being built step-by-step following a **62-step Atomic Commit Protocol**. Each step corresponds to one logical unit of functionality with a defined commit message.
-
-- **Completed:** Steps 1–27
-- **Current:** Step 28 — Interactive CLI for ticker input and weight configuration
-- **Remaining:** Steps 28–62 (worker layer, UI, database, Docker, CI/CD)
-
-## Running Locally
+## Quickstart
 
 ```bash
-uv sync                          # install dependencies
-cp .env.example .env             # configure environment variables
-uv run python -m stock_agent.main  # run CLI
-uv run python -m stock_agent.ui.app  # run web UI
+uv sync
+uv run stock-agent --ticker NVDA --mock
 ```
 
-For the full stack (app + worker + Redis + PostgreSQL + Ollama):
+Convenience path:
 
 ```bash
-docker-compose up --build
+python demo.py --ticker NVDA --mock
 ```
 
-## License
+Real mode requires provider credentials in `.env`:
 
-MIT
+```bash
+cp .env.example .env
+uv run stock-agent --ticker AAPL
+```
+
+## Demo
+
+Mock mode prints a validated JSON report followed by a compact summary.
+
+```bash
+uv run stock-agent --ticker NVDA --mock
+```
+
+```json
+{
+  "ticker": "NVDA",
+  "company_name": "NVIDIA Corporation",
+  "current_price": 123.45,
+  "market_summary": "NVIDIA Corporation is shown in mock mode with strong growth context, constructive technical posture, and valuation risk kept visible.",
+  "fundamental_score": 7.4,
+  "technical_score": 8.2,
+  "weighted_score": 7.8,
+  "calculation": "(7.4 x 0.50) + (8.2 x 0.50) = 7.8",
+  "risks": ["Valuation could compress if growth expectations cool."],
+  "sources": ["mock://market-data/nvda"],
+  "confidence": "medium",
+  "recommendation": "BUY"
+}
+```
+
+Full transcript: [docs/demo-transcript.md](docs/demo-transcript.md)
+
+## Architecture
+
+```mermaid
+flowchart TD
+    A["Ticker input"] --> B["Validate ticker"]
+    B --> C["Fetch market data"]
+    B --> D["Search recent context"]
+    C --> E["Calculate metrics"]
+    D --> E
+    E --> F["PydanticAI agent"]
+    F --> G["Validate StockReport"]
+    G --> H["Print JSON + summary"]
+    B --> I["Mock data path"]
+    I --> G
+```
+
+## Output Schema
+
+The top-level result is `stock_agent.models.report.StockReport`.
+
+```python
+class StockReport(BaseModel):
+    ticker: str
+    company_name: str
+    current_price: float | None
+    analysis_date: datetime
+    market_summary: str
+    fundamental_score: float
+    technical_score: float
+    weighted_score: float
+    calculation: str
+    key_points: list[KeyPoint]
+    recommendation: Literal["BUY", "WATCH", "AVOID"]
+    risks: list[str]
+    sources: list[str]
+    confidence: Literal["low", "medium", "high"]
+    peers: list[PeerReport]
+```
+
+## How The Agent Works
+
+1. Validates and normalizes the ticker.
+2. Gathers stock, peer, technical, and news context through tools.
+3. Computes all numerical scores in deterministic Python code.
+4. Sends pre-computed context to the PydanticAI agent for final reasoning.
+5. Validates the result against `StockReport`.
+6. Prints both JSON and a short summary.
+
+The core rule: the LLM reasons over pre-computed data, but never computes indicators or scores itself.
+
+## For Interviewers
+
+- CLI entry point: `src/stock_agent/cli.py`
+- Mock data: `src/stock_agent/mock_data.py`
+- Agent definition: `src/stock_agent/agent.py`
+- Output model: `src/stock_agent/models/report.py`
+- Tests: `tests/test_cli_demo.py`
+
+## Tests
+
+```bash
+uv run pytest -q
+```
+
+The demo-focused tests cover ticker validation, mock data shape, Pydantic validation, JSON serialization, and CLI mock mode without API keys.
+
+## Disclaimer
+
+This project is a technical demo of agentic research, deterministic calculations, and structured output. It is not financial advice.
+
+## Limitations
+
+- Market data freshness depends on the active provider.
+- LLM summaries may be incomplete or miss context from source data.
+- Mock mode uses static sample data and should not be interpreted as current market analysis.
+- Real mode requires configured model credentials and may depend on network availability.
+
+## Next Improvements
+
+- Add source URLs from every real-mode tool result.
+- Expand mock fixtures for several tickers and recommendations.
+- Add GitHub Actions for fresh-clone test verification.
+- Add Docker once the CLI demo path is fully stable.
