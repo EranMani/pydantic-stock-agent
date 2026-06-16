@@ -62,9 +62,13 @@ def _linear_bar(label: str, score: float) -> None:
     Uses ui.column / ui.row — no HTML, CSS, or JavaScript.
     """
     colour = _score_colour(score)
-    with ui.column().classes("w-full gap-1"):
-        ui.label(label).classes(f"text-xs font-semibold uppercase tracking-wide text-{COLOURS['subtle']}")
-        ui.linear_progress(value=score / 10).props(
+    with ui.column().classes("w-full gap-2"):
+        with ui.row().classes("w-full items-baseline justify-between gap-3"):
+            ui.label(label).classes(f"text-xs font-semibold uppercase tracking-wide text-{COLOURS['subtle']}")
+            ui.label(f"{score:.1f}").classes(
+                f"text-sm font-bold tabular-nums text-{colour} shrink-0"
+            )
+        ui.linear_progress(value=score / 10, show_value=False).props(
             f"color={colour} track-color=grey-8 rounded-borders size=8px"
         )
 
