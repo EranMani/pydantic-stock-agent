@@ -121,8 +121,17 @@ class StockReport(BaseModel):
     company_name: str = Field(
         description="Full company name (e.g. 'Apple Inc.'). Use the value provided in the analysis prompt.",
     )
+    current_price: float | None = Field(
+        default=None,
+        ge=0.0,
+        description="Most recent market price in USD when available. None when the active data provider does not return a current quote.",
+    )
     analysis_date: datetime = Field(
         description="UTC timestamp of when this analysis was generated.",
+    )
+    market_summary: str = Field(
+        default="",
+        description="Brief plain-English summary of the market context and the main drivers behind the report.",
     )
     fundamental_score: Score = Field(
         description="Fundamental pipeline score in the range [1.0, 10.0].",
@@ -133,6 +142,10 @@ class StockReport(BaseModel):
     weighted_score: Score = Field(
         description="Final score combining fundamental and technical scores using ScoringStrategy weights. Range [1.0, 10.0].",
     )
+    calculation: str = Field(
+        default="",
+        description="Human-readable weighted score formula using the exact pre-computed scores and configured strategy weights.",
+    )
     key_points: list[KeyPoint] = Field(
         description=(
             "4–6 analyst observations explaining the key drivers behind the recommendation. "
@@ -142,6 +155,18 @@ class StockReport(BaseModel):
     )
     recommendation: Literal["BUY", "WATCH", "AVOID"] = Field(
         description="Final recommendation: BUY (strong setup), WATCH (monitor for entry), AVOID (unfavourable conditions).",
+    )
+    risks: list[str] = Field(
+        default_factory=list,
+        description="Specific risks surfaced by the deterministic tools or source-backed news context. Empty only when no risks are available.",
+    )
+    sources: list[str] = Field(
+        default_factory=list,
+        description="Source references used to support the report. Mock mode uses mock:// references; real mode should include provider or URL references.",
+    )
+    confidence: Literal["low", "medium", "high"] = Field(
+        default="medium",
+        description="Confidence in the report based on data completeness, source quality, and consistency between fundamental and technical signals.",
     )
     peers: list[PeerReport] = Field(
         description="Analysis results for industry peer stocks fetched from yfinance (up to 5 peers).",

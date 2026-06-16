@@ -22,7 +22,7 @@ from pydantic_ai.models.test import TestModel
 
 from stock_agent.agent import agent
 from stock_agent.models.context import AgentDependencies, ScoringStrategy
-from stock_agent.models.report import StockReport
+from stock_agent.models.report import KeyPoint, StockReport
 from stock_agent.tools.fundamental_tools import (
     get_fundamental_data,
     get_peer_reports,
@@ -78,11 +78,23 @@ async def test_testmodel_run() -> None:
 
     valid_output = {
         "ticker": TICKER,
+        "company_name": COMPANY,
+        "current_price": 12.34,
         "analysis_date": datetime.now(timezone.utc).isoformat(),
+        "market_summary": "Test summary produced by TestModel.",
         "fundamental_score": 7.5,
         "technical_score": 8.0,
         "weighted_score": 7.75,
-        "summary": "Test summary produced by TestModel.",
+        "calculation": "(7.5 x 0.50) + (8.0 x 0.50) = 7.75",
+        "key_points": [
+            KeyPoint(text="Fundamental score of 7.5", sentiment="positive").model_dump(),
+            KeyPoint(text="Technical score of 8.0", sentiment="positive").model_dump(),
+            KeyPoint(text="Weighted score of 7.75", sentiment="positive").model_dump(),
+            KeyPoint(text="No peers returned in this wiring test", sentiment="neutral").model_dump(),
+        ],
+        "risks": ["TestModel fixture risk placeholder."],
+        "sources": ["test://agent-wiring"],
+        "confidence": "medium",
         "recommendation": "BUY",
         "peers": [],
     }

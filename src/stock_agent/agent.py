@@ -58,6 +58,9 @@ STRICT RULES — violations invalidate the analysis:
      clear directional implication).
 6. The company_name field must be populated with the full company name provided
    in the analysis prompt.
+7. Fill market_summary, calculation, risks, sources, and confidence. Sources
+   must reference the data providers or URLs available from tool results; use
+   "low" confidence when required data or source context is sparse.
 """
 
 
@@ -137,7 +140,8 @@ async def run_analysis(ticker: str, strategy: ScoringStrategy) -> StockReport:
         f"7. Write 4–6 KeyPoint objects — each with a specific data-driven text and a sentiment "
         f"('positive', 'negative', or 'neutral').\n"
         f"8. Set company_name to '{company_name}'.\n"
-        f"9. Produce the final StockReport."
+        f"9. Fill market_summary, calculation, risks, sources, and confidence from the tool results.\n"
+        f"10. Produce the final StockReport."
     )
 
     result = await agent.run(prompt, deps=deps)
